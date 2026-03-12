@@ -1,0 +1,41 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_GATE_CONFIG, GateDetector } from './gateDetector';
+
+function frameWithAmplitude(amplitude: number): Float32Array {
+  return new Float32Array(960).fill(amplitude);
+}
+
+describe('GateDetector', () => {
+  it('opens after three hot frames and closes after the hang time', () => {
+    const detector = new GateDetector();
+    const events = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      events.push(...detector.processFrame('feed', frameWithAmplitude(0.2), index * DEFAULT_GATE_CONFIG.frameDurationMs));
+    }
+
+    expect(events.some((event) => event.type === 'gate-open')).toBe(true);
+
+    let closeEvents = 0;
+    for (let index = 0; index < 20; index += 1) {
+      const result = detector.processFrame(
+        'feed',
+        frameWithAmplitude(0.0001),
+        (index + 3) * DEFAULT_GATE_CONFIG.frameDurationMs
+      );
+      closeEvents += result.filter((event) => event.type === 'gate-close').length;
+    }
+
+    expect(closeEvents).toBe(1);
+  });
+
+  it('stays closed on quiet frames while still emitting level data', () => {
+    const detector = new GateDetector();
+
+    const events = detector.processFrame('feed', frameWithAmplitude(0.0001), 0);
+
+    expect(events.some((event) => event.type === 'level')).toBe(true);
+    expect(events.some((event) => event.type === 'gate-open')).toBe(false);
+    expect(detector.isGateOpen()).toBe(false);
+  });
+});
