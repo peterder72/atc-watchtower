@@ -1,11 +1,13 @@
 import {
   DEFAULT_SQUELCH_THRESHOLD_DB,
-  MAX_SQUELCH_THRESHOLD_DB,
-  MIN_SQUELCH_THRESHOLD_DB,
   type EngineSnapshot,
   type FeedDef
 } from '../domain/models';
-
+import { DebugPanel } from './console/DebugPanel';
+import { ConsoleToolbar } from './console/ConsoleToolbar';
+import { FeedRuntimeCard } from './console/FeedRuntimeCard';
+import { EmptyState } from './ui/common';
+import { panelClass } from './ui/styles';
 interface ConsoleViewProps {
   airportName: string;
   feeds: FeedDef[];
@@ -15,22 +17,6 @@ interface ConsoleViewProps {
   onStart: () => void;
   onStop: () => void;
   onFeedSquelchChange: (feedId: string, thresholdDb: number) => void;
-}
-
-function formatLevel(value: number): string {
-  return `${(value * 100).toFixed(value < 0.01 ? 1 : 0)}%`;
-}
-
-function formatTime(value: number | undefined): string {
-  if (value === undefined || Number.isNaN(value)) {
-    return '-';
-  }
-
-  return value.toFixed(1);
-}
-
-function formatDb(value: number): string {
-  return `${value} dB`;
 }
 
 export function ConsoleView({
@@ -49,133 +35,36 @@ export function ConsoleView({
     : null;
 
   return (
-    <section className="panel stack-lg">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Console</p>
-          <h2>{airportName || 'No airport selected'}</h2>
-          <p className="console-speaker">
-            {activeSpeaker ? `Current speaker: ${activeSpeaker}` : 'Current speaker: none detected'}
-          </p>
-        </div>
-        <div className="console-actions">
-          <button className="secondary-button" type="button" disabled={!engineSnapshot.running} onClick={onStop}>
-            Stop
-          </button>
-          <button className="primary-button" type="button" disabled={!canStart} onClick={onStart}>
-            Start listening
-          </button>
-        </div>
-      </div>
+    <section className={`${panelClass} space-y-4`}>
+      <ConsoleToolbar
+        activeSpeaker={activeSpeaker}
+        airportName={airportName}
+        canStart={canStart}
+        isRunning={engineSnapshot.running}
+        onStart={onStart}
+        onStop={onStop}
+      />
 
       {feeds.length === 0 ? (
-        <p className="muted">Select one or more feeds in the Library before starting the console.</p>
+        <EmptyState>Select one or more feeds in the Library before starting the console.</EmptyState>
       ) : (
         <>
-          <div className="console-grid">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {feeds.map((feed) => {
-              const runtime = engineSnapshot.feeds[feed.id];
-              const level = runtime ? Math.min(runtime.peak * 600, 100) : 0;
-              const squelchThresholdDb = feedSquelchThresholdsDb[feed.id] ?? DEFAULT_SQUELCH_THRESHOLD_DB;
-
               return (
-                <article key={feed.id} className={`feed-card ${runtime?.isFloor ? 'is-floor' : ''}`}>
-                  <div className="feed-card-header">
-                    <div>
-                      <p className="eyebrow">Feed</p>
-                      <h3>{feed.label}</h3>
-                    </div>
-                    <span className="priority-pill">P{feedPriorities[feed.id] ?? feed.defaultPriority}</span>
-                  </div>
-
-                  <div className="status-row">
-                    <span className={`status-pill ${runtime?.isFloor ? 'status-floor' : runtime?.gateOpen ? 'status-active' : 'status-idle'}`}>
-                      {runtime?.isFloor ? 'Talking now' : runtime?.gateOpen ? 'Signal detected' : 'Idle'}
-                    </span>
-                    <span className={`status-pill ${runtime?.status === 'error' ? 'status-error' : 'status-tech'}`}>
-                      {runtime?.status ?? 'idle'}
-                    </span>
-                  </div>
-
-                  <div className="squelch-block">
-                    <div className="squelch-header">
-                      <span>Squelch</span>
-                      <strong>{formatDb(squelchThresholdDb)}</strong>
-                    </div>
-                    <input
-                      aria-label={`Squelch threshold for ${feed.label}`}
-                      className="squelch-slider"
-                      type="range"
-                      min={MIN_SQUELCH_THRESHOLD_DB}
-                      max={MAX_SQUELCH_THRESHOLD_DB}
-                      step={1}
-                      value={squelchThresholdDb}
-                      onChange={(event) => onFeedSquelchChange(feed.id, event.currentTarget.valueAsNumber)}
-                    />
-                    <div className="squelch-scale">
-                      <span>More open</span>
-                      <span>Filter more static</span>
-                    </div>
-                  </div>
-
-                  <div className="meter-block">
-                    <div className="meter-labels">
-                      <span>Peak</span>
-                      <span>{formatLevel(runtime?.peak ?? 0)}</span>
-                    </div>
-                    <div className="meter-track">
-                      <span className="meter-fill" style={{ width: `${level}%` }} />
-                    </div>
-                  </div>
-
-                  <dl className="feed-facts">
-                    <div>
-                      <dt>Gate</dt>
-                      <dd>{runtime?.gateOpen ? 'open' : 'closed'}</dd>
-                    </div>
-                    <div>
-                      <dt>Priority</dt>
-                      <dd>{feedPriorities[feed.id] ?? feed.defaultPriority}</dd>
-                    </div>
-                    <div>
-                      <dt>Floor owner</dt>
-                      <dd>{engineSnapshot.floorFeedId === feed.id ? 'current' : 'no'}</dd>
-                    </div>
-                  </dl>
-
-                  {runtime?.error ? <p className="error-text">{runtime.error}</p> : null}
-                </article>
+                <FeedRuntimeCard
+                  key={feed.id}
+                  feed={feed}
+                  priority={feedPriorities[feed.id] ?? feed.defaultPriority}
+                  runtime={engineSnapshot.feeds[feed.id]}
+                  squelchThresholdDb={feedSquelchThresholdsDb[feed.id] ?? DEFAULT_SQUELCH_THRESHOLD_DB}
+                  onFeedSquelchChange={onFeedSquelchChange}
+                />
               );
             })}
           </div>
 
-          <section className="subpanel stack-sm debug-panel">
-            <div>
-              <p className="eyebrow">Debug</p>
-              <h3>Signal pipeline</h3>
-            </div>
-            {feeds.map((feed) => {
-              const runtime = engineSnapshot.feeds[feed.id];
-              const squelchThresholdDb = feedSquelchThresholdsDb[feed.id] ?? DEFAULT_SQUELCH_THRESHOLD_DB;
-              return (
-                <div key={feed.id} className="debug-row">
-                  <strong>{feed.label}</strong>
-                  <span>squelch: {formatDb(squelchThresholdDb)}</span>
-                  <span>mode: {runtime?.analysisMode ?? 'none'}</span>
-                  <span>status: {runtime?.status ?? 'idle'}</span>
-                  <span>gate: {runtime?.gateOpen ? 'open' : 'closed'}</span>
-                  <span>floor: {runtime?.isFloor ? 'yes' : 'no'}</span>
-                  <span>peak: {formatLevel(runtime?.peak ?? 0)}</span>
-                  <span>readyState: {runtime?.readyState ?? -1}</span>
-                  <span>networkState: {runtime?.networkState ?? -1}</span>
-                  <span>currentTime: {formatTime(runtime?.currentTime)}</span>
-                  <span>paused: {runtime?.paused ? 'yes' : 'no'}</span>
-                  <span>captureTracks: {runtime?.captureTrackCount ?? 0}</span>
-                  <span>{runtime?.debug ?? 'no debug message'}</span>
-                </div>
-              );
-            })}
-          </section>
+          <DebugPanel engineSnapshot={engineSnapshot} feedSquelchThresholdsDb={feedSquelchThresholdsDb} feeds={feeds} />
         </>
       )}
     </section>

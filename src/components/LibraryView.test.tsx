@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type AirportEntry, createAirportKey } from '../domain/models';
@@ -102,7 +102,6 @@ describe('LibraryView drag and drop', () => {
     expect(target).toBeTruthy();
 
     fireEvent.dragStart(source!, { dataTransfer });
-    dataTransfer.getData = () => '';
     fireEvent.dragOver(target!, { dataTransfer });
     fireEvent.drop(target!, { dataTransfer });
 
@@ -123,5 +122,26 @@ describe('LibraryView drag and drop', () => {
     fireEvent.drop(targetPack, { dataTransfer });
 
     expect(props.onMoveFeed).toHaveBeenCalledWith('tower', airports[0].key, airports[1].key);
+  });
+
+  it('keeps the reorder target highlight while dragging across child elements', () => {
+    renderLibraryView();
+    const dataTransfer = createDataTransfer();
+    const source = screen.getByText('EHEH Ground').closest('label');
+    const target = screen.getByText('EHEH Tower').closest('label');
+    const targetChild = within(target!).getByText('Priority');
+
+    expect(source).toBeTruthy();
+    expect(target).toBeTruthy();
+
+    fireEvent.dragStart(source!, { dataTransfer });
+    dataTransfer.getData = () => '';
+    fireEvent.dragOver(target!, { dataTransfer });
+
+    expect(target!.className).toContain('border-[rgba(99,212,199,0.45)]');
+
+    fireEvent.dragLeave(target!, { dataTransfer, relatedTarget: targetChild });
+
+    expect(target!.className).toContain('border-[rgba(99,212,199,0.45)]');
   });
 });
