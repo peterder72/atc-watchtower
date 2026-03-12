@@ -38,7 +38,13 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   const runtimeStatusTone = runtime?.status === 'error' ? 'danger' : 'neutral';
 
   return (
-    <article className={cn(feedCardClass, 'grid gap-4', runtime?.isFloor && 'border-teal/35 shadow-floor')}>
+    <article
+      className={cn(
+        feedCardClass,
+        'grid gap-4 transition-[border-color,box-shadow] duration-150',
+        runtime?.isFloor ? 'border-success/45 shadow-floor' : 'shadow-panel'
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <p className={eyebrowClass}>Feed</p>
