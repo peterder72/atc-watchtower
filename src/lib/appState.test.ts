@@ -35,6 +35,12 @@ describe('normalizeAppState', () => {
         feedSquelchThresholdsDb: {
           [duplicateFeedId]: -54,
           stale: -48
+        },
+        audioProcessingSettings: {
+          attackMs: 80,
+          hangMs: 650,
+          openDeltaDb: 10,
+          closeGapDb: 6
         }
       },
       [firstPack, duplicatePack]
@@ -44,6 +50,12 @@ describe('normalizeAppState', () => {
     expect(normalizedState.selectedFeedIds).toEqual([survivingFeedId]);
     expect(normalizedState.feedSquelchThresholdsDb).toEqual({
       [survivingFeedId]: -54
+    });
+    expect(normalizedState.audioProcessingSettings).toEqual({
+      attackMs: 80,
+      hangMs: 650,
+      openDeltaDb: 10,
+      closeGapDb: 6
     });
   });
 });

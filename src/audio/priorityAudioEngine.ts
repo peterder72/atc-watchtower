@@ -1,5 +1,8 @@
 import {
+  DEFAULT_AUDIO_PROCESSING_SETTINGS,
   DEFAULT_SQUELCH_THRESHOLD_DB,
+  normalizeAudioProcessingSettings,
+  type AudioProcessingSettings,
   type EngineFeedState,
   type EngineSnapshot,
   type FeedSelection
@@ -79,6 +82,8 @@ export class PriorityAudioEngine {
   private analysisTimerId: number | null = null;
 
   private feedSquelchThresholdsDb: Record<string, number> = {};
+
+  private audioProcessingSettings: AudioProcessingSettings = { ...DEFAULT_AUDIO_PROCESSING_SETTINGS };
 
   private lastAnalysisAt: number | null = null;
 
@@ -183,6 +188,15 @@ export class PriorityAudioEngine {
     }
   }
 
+  setAudioProcessingSettings(settings: AudioProcessingSettings): void {
+    const nextSettings = normalizeAudioProcessingSettings(settings);
+    this.audioProcessingSettings = { ...nextSettings };
+
+    for (const runtime of this.runtimes.values()) {
+      runtime.gateDetector.updateConfig(nextSettings);
+    }
+  }
+
   private buildSnapshot(changedFeedIds?: Iterable<string>): EngineSnapshot {
     const changedFeedIdSet = changedFeedIds ? new Set(changedFeedIds) : null;
     const feeds = Object.fromEntries(
@@ -212,6 +226,18 @@ export class PriorityAudioEngine {
 
   private getFeedSquelchThresholdDb(feedId: string): number {
     return this.feedSquelchThresholdsDb[feedId] ?? DEFAULT_SQUELCH_THRESHOLD_DB;
+  }
+
+  private buildGateDetectorConfig(feedId: string) {
+    return {
+      frameDurationMs: ANALYSIS_INTERVAL_MS,
+      configuredFloorDb: this.getFeedSquelchThresholdDb(feedId),
+      ...this.audioProcessingSettings
+    };
+  }
+
+  private createGateDetector(feedId: string): GateDetector {
+    return new GateDetector(this.buildGateDetectorConfig(feedId));
   }
 
   private attachFeed(selection: FeedSelection): void {
@@ -278,12 +304,7 @@ export class PriorityAudioEngine {
       analysisBuffer: new Float32Array(
         new ArrayBuffer(analyzerNode.fftSize * Float32Array.BYTES_PER_ELEMENT)
       ),
-      gateDetector: new GateDetector({
-        frameDurationMs: ANALYSIS_INTERVAL_MS,
-        configuredFloorDb: this.getFeedSquelchThresholdDb(selection.feed.id),
-        openDeltaDb: 7,
-        closeGapDb: 4
-      }),
+      gateDetector: this.createGateDetector(selection.feed.id),
       filterHigh,
       filterLow
     };

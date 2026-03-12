@@ -4,23 +4,30 @@ interface ConsoleToolbarProps {
   activeSpeaker: string | null;
   airportName: string;
   canStart: boolean;
+  isDebugVisible: boolean;
   isRunning: boolean;
   onStart: () => void;
   onStop: () => void;
+  onToggleDebug: () => void;
 }
 
 export function ConsoleToolbar({
   activeSpeaker,
   airportName,
   canStart,
+  isDebugVisible,
   isRunning,
   onStart,
-  onStop
+  onStop,
+  onToggleDebug
 }: ConsoleToolbarProps) {
   return (
     <SectionHeading
       actions={
         <>
+          <Button variant="secondary" onClick={onToggleDebug}>
+            {isDebugVisible ? 'Hide debug' : 'Show debug'}
+          </Button>
           <Button disabled={!isRunning} variant="secondary" onClick={onStop}>
             Stop
           </Button>

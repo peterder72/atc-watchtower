@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AudioSettingsDialog } from './components/AudioSettingsDialog';
 import { ConsoleView } from './components/ConsoleView';
 import { LibraryView } from './components/LibraryView';
 import { AppHeader } from './components/AppHeader';
@@ -6,9 +7,12 @@ import { StatusStrip } from './components/StatusStrip';
 import { pageShellClass } from './components/ui/styles';
 import { PriorityAudioEngine } from './audio/priorityAudioEngine';
 import {
+  DEFAULT_AUDIO_PROCESSING_SETTINGS,
   clampSquelchThresholdDb,
-  DEFAULT_SQUELCH_THRESHOLD_DB,
   DEFAULT_APP_STATE,
+  DEFAULT_SQUELCH_THRESHOLD_DB,
+  normalizeAudioProcessingSettings,
+  type AudioProcessingSettings,
   type EngineSnapshot,
   type FeedSelection,
   type ImportNotice
@@ -37,6 +41,8 @@ export default function App() {
   const [importNotices, setImportNotices] = useState<ImportNotice[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isAudioSettingsOpen, setIsAudioSettingsOpen] = useState(false);
+  const [isDebugPanelVisible, setIsDebugPanelVisible] = useState(false);
   const engineRef = useRef<PriorityAudioEngine | null>(null);
 
   useEffect(() => {
@@ -95,6 +101,10 @@ export default function App() {
   useEffect(() => {
     engineRef.current?.setFeedSquelchThresholds(activeFeedSquelchThresholdsDb);
   }, [activeFeedSquelchThresholdsDb]);
+
+  useEffect(() => {
+    engineRef.current?.setAudioProcessingSettings(appState.audioProcessingSettings);
+  }, [appState.audioProcessingSettings]);
 
   const selectedAirport = useMemo(
     () => airports.find((entry) => entry.key === appState.selectedAirportKey) ?? airports[0] ?? null,
@@ -232,9 +242,57 @@ export default function App() {
     await engineRef.current?.stop();
   };
 
+  const handleAudioProcessingSettingChange = useCallback(
+    (setting: keyof AudioProcessingSettings, value: number) => {
+      setAppState((previous) => {
+        const nextAudioProcessingSettings = normalizeAudioProcessingSettings({
+          ...previous.audioProcessingSettings,
+          [setting]: value
+        });
+
+        if (
+          nextAudioProcessingSettings.attackMs === previous.audioProcessingSettings.attackMs &&
+          nextAudioProcessingSettings.hangMs === previous.audioProcessingSettings.hangMs &&
+          nextAudioProcessingSettings.openDeltaDb === previous.audioProcessingSettings.openDeltaDb &&
+          nextAudioProcessingSettings.closeGapDb === previous.audioProcessingSettings.closeGapDb
+        ) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          audioProcessingSettings: nextAudioProcessingSettings
+        };
+      });
+    },
+    []
+  );
+
+  const handleResetAudioProcessingSettings = useCallback(() => {
+    setAppState((previous) => {
+      if (
+        previous.audioProcessingSettings.attackMs === DEFAULT_AUDIO_PROCESSING_SETTINGS.attackMs &&
+        previous.audioProcessingSettings.hangMs === DEFAULT_AUDIO_PROCESSING_SETTINGS.hangMs &&
+        previous.audioProcessingSettings.openDeltaDb === DEFAULT_AUDIO_PROCESSING_SETTINGS.openDeltaDb &&
+        previous.audioProcessingSettings.closeGapDb === DEFAULT_AUDIO_PROCESSING_SETTINGS.closeGapDb
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        audioProcessingSettings: { ...DEFAULT_AUDIO_PROCESSING_SETTINGS }
+      };
+    });
+  }, []);
+
   return (
     <div className={pageShellClass}>
-      <AppHeader activeView={activeView} onViewChange={setActiveView} />
+      <AppHeader
+        activeView={activeView}
+        onOpenSettings={() => setIsAudioSettingsOpen(true)}
+        onViewChange={setActiveView}
+      />
 
       <main className="space-y-4">
         <StatusStrip
@@ -266,12 +324,22 @@ export default function App() {
             feedPriorities={feedPriorities}
             feedSquelchThresholdsDb={activeFeedSquelchThresholdsDb}
             engineSnapshot={engineSnapshot}
+            isDebugVisible={isDebugPanelVisible}
             onStart={handleStartListening}
             onStop={handleStopListening}
             onFeedSquelchChange={handleFeedSquelchChange}
+            onToggleDebug={() => setIsDebugPanelVisible((current) => !current)}
           />
         )}
       </main>
+
+      <AudioSettingsDialog
+        isOpen={isAudioSettingsOpen}
+        settings={appState.audioProcessingSettings}
+        onChange={handleAudioProcessingSettingChange}
+        onClose={() => setIsAudioSettingsOpen(false)}
+        onReset={handleResetAudioProcessingSettings}
+      />
     </div>
   );
 }

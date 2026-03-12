@@ -1,4 +1,10 @@
 import type { FeedActivityEvent } from '../domain/models';
+import {
+  DEFAULT_ATTACK_MS,
+  DEFAULT_CLOSE_GAP_DB,
+  DEFAULT_HANG_MS,
+  DEFAULT_OPEN_DELTA_DB
+} from '../domain/models';
 
 export interface GateDetectorConfig {
   frameDurationMs: number;
@@ -14,11 +20,11 @@ export interface GateDetectorConfig {
 
 export const DEFAULT_GATE_CONFIG: GateDetectorConfig = {
   frameDurationMs: 20,
-  attackMs: 60,
-  hangMs: 400,
+  attackMs: DEFAULT_ATTACK_MS,
+  hangMs: DEFAULT_HANG_MS,
   configuredFloorDb: -50,
-  openDeltaDb: 10,
-  closeGapDb: 6,
+  openDeltaDb: DEFAULT_OPEN_DELTA_DB,
+  closeGapDb: DEFAULT_CLOSE_GAP_DB,
   levelEmitIntervalMs: 100,
   initialNoiseFloorDb: -72,
   noiseFloorAlpha: 0.05
@@ -54,7 +60,7 @@ export function summarizeFrame(samples: ArrayLike<number>): { rms: number; peak:
 }
 
 export class GateDetector {
-  private readonly config: GateDetectorConfig;
+  private config: GateDetectorConfig;
 
   private gateOpen = false;
 
@@ -76,6 +82,13 @@ export class GateDetector {
 
   setConfiguredFloorDb(value: number): void {
     this.configuredFloorDb = value;
+  }
+
+  updateConfig(config: Partial<Pick<GateDetectorConfig, 'attackMs' | 'hangMs' | 'openDeltaDb' | 'closeGapDb'>>): void {
+    this.config = {
+      ...this.config,
+      ...config
+    };
   }
 
   processFrame(feedId: string, samples: ArrayLike<number>, at: number, elapsedMs = this.config.frameDurationMs): FeedActivityEvent[] {

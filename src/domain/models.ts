@@ -40,11 +40,19 @@ export interface StoredFeedPack extends FeedPackV1 {
   sourceFileName: string;
 }
 
+export interface AudioProcessingSettings {
+  attackMs: number;
+  hangMs: number;
+  openDeltaDb: number;
+  closeGapDb: number;
+}
+
 export interface AppState {
   packs: StoredFeedPack[];
   selectedAirportKey: string | null;
   selectedFeedIds: string[];
   feedSquelchThresholdsDb: Record<string, number>;
+  audioProcessingSettings: AudioProcessingSettings;
 }
 
 export interface FeedValidationResult {
@@ -103,6 +111,48 @@ export const MIN_SQUELCH_THRESHOLD_DB = -80;
 export const MAX_SQUELCH_THRESHOLD_DB = -30;
 export const DEFAULT_SQUELCH_THRESHOLD_DB = -68;
 
+export const MIN_ATTACK_MS = 20;
+export const MAX_ATTACK_MS = 300;
+export const ATTACK_MS_STEP = 10;
+export const DEFAULT_ATTACK_MS = 60;
+
+export const MIN_HANG_MS = 100;
+export const MAX_HANG_MS = 1500;
+export const HANG_MS_STEP = 50;
+export const DEFAULT_HANG_MS = 400;
+
+export const MIN_OPEN_DELTA_DB = 3;
+export const MAX_OPEN_DELTA_DB = 15;
+export const OPEN_DELTA_DB_STEP = 1;
+export const DEFAULT_OPEN_DELTA_DB = 7;
+
+export const MIN_CLOSE_GAP_DB = 1;
+export const MAX_CLOSE_GAP_DB = 10;
+export const CLOSE_GAP_DB_STEP = 1;
+export const DEFAULT_CLOSE_GAP_DB = 4;
+
+export const DEFAULT_AUDIO_PROCESSING_SETTINGS: AudioProcessingSettings = {
+  attackMs: DEFAULT_ATTACK_MS,
+  hangMs: DEFAULT_HANG_MS,
+  openDeltaDb: DEFAULT_OPEN_DELTA_DB,
+  closeGapDb: DEFAULT_CLOSE_GAP_DB
+};
+
+function clampSteppedValue(
+  value: number,
+  minValue: number,
+  maxValue: number,
+  step: number,
+  defaultValue: number
+): number {
+  if (!Number.isFinite(value)) {
+    return defaultValue;
+  }
+
+  const snappedValue = minValue + Math.round((value - minValue) / step) * step;
+  return Math.min(maxValue, Math.max(minValue, snappedValue));
+}
+
 export function clampSquelchThresholdDb(value: number): number {
   if (!Number.isFinite(value)) {
     return DEFAULT_SQUELCH_THRESHOLD_DB;
@@ -111,11 +161,39 @@ export function clampSquelchThresholdDb(value: number): number {
   return Math.min(MAX_SQUELCH_THRESHOLD_DB, Math.max(MIN_SQUELCH_THRESHOLD_DB, Math.round(value)));
 }
 
+export function clampAttackMs(value: number): number {
+  return clampSteppedValue(value, MIN_ATTACK_MS, MAX_ATTACK_MS, ATTACK_MS_STEP, DEFAULT_ATTACK_MS);
+}
+
+export function clampHangMs(value: number): number {
+  return clampSteppedValue(value, MIN_HANG_MS, MAX_HANG_MS, HANG_MS_STEP, DEFAULT_HANG_MS);
+}
+
+export function clampOpenDeltaDb(value: number): number {
+  return clampSteppedValue(value, MIN_OPEN_DELTA_DB, MAX_OPEN_DELTA_DB, OPEN_DELTA_DB_STEP, DEFAULT_OPEN_DELTA_DB);
+}
+
+export function clampCloseGapDb(value: number): number {
+  return clampSteppedValue(value, MIN_CLOSE_GAP_DB, MAX_CLOSE_GAP_DB, CLOSE_GAP_DB_STEP, DEFAULT_CLOSE_GAP_DB);
+}
+
+export function normalizeAudioProcessingSettings(
+  value: Partial<AudioProcessingSettings> | null | undefined
+): AudioProcessingSettings {
+  return {
+    attackMs: clampAttackMs(value?.attackMs ?? DEFAULT_ATTACK_MS),
+    hangMs: clampHangMs(value?.hangMs ?? DEFAULT_HANG_MS),
+    openDeltaDb: clampOpenDeltaDb(value?.openDeltaDb ?? DEFAULT_OPEN_DELTA_DB),
+    closeGapDb: clampCloseGapDb(value?.closeGapDb ?? DEFAULT_CLOSE_GAP_DB)
+  };
+}
+
 export const DEFAULT_APP_STATE: AppState = {
   packs: [],
   selectedAirportKey: null,
   selectedFeedIds: [],
-  feedSquelchThresholdsDb: {}
+  feedSquelchThresholdsDb: {},
+  audioProcessingSettings: DEFAULT_AUDIO_PROCESSING_SETTINGS
 };
 
 export function createAirportKey(packId: string, icao: string): string {

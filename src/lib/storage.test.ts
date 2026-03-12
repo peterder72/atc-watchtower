@@ -23,13 +23,19 @@ beforeEach(async () => {
 });
 
 describe('storage', () => {
-  it('persists squelch thresholds alongside app state', async () => {
+  it('persists squelch thresholds and audio settings alongside app state', async () => {
     const state: AppState = {
       ...DEFAULT_APP_STATE,
       selectedAirportKey: 'pack-eham::EHAM',
       selectedFeedIds: ['tower'],
       feedSquelchThresholdsDb: {
         tower: -54
+      },
+      audioProcessingSettings: {
+        attackMs: 80,
+        hangMs: 550,
+        openDeltaDb: 9,
+        closeGapDb: 5
       }
     };
 
@@ -67,6 +73,40 @@ describe('storage', () => {
       selectedAirportKey: 'pack-eham::EHAM',
       selectedFeedIds: ['tower'],
       feedSquelchThresholdsDb: {}
+    });
+  });
+
+  it('clamps invalid persisted audio settings back into supported ranges', async () => {
+    const database = await openDB(DB_NAME, DB_VERSION, {
+      upgrade(nextDatabase) {
+        if (!nextDatabase.objectStoreNames.contains(STORE_NAME)) {
+          nextDatabase.createObjectStore(STORE_NAME);
+        }
+      }
+    });
+
+    await database.put(
+      STORE_NAME,
+      {
+        ...DEFAULT_APP_STATE,
+        audioProcessingSettings: {
+          attackMs: 999,
+          hangMs: 25,
+          openDeltaDb: 1.2,
+          closeGapDb: 20
+        }
+      },
+      STATE_KEY
+    );
+    database.close();
+
+    const { loadAppState } = await import('./storage');
+
+    expect((await loadAppState()).audioProcessingSettings).toEqual({
+      attackMs: 300,
+      hangMs: 100,
+      openDeltaDb: 3,
+      closeGapDb: 10
     });
   });
 

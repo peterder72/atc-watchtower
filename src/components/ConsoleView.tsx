@@ -14,9 +14,11 @@ interface ConsoleViewProps {
   feedPriorities: Record<string, number>;
   feedSquelchThresholdsDb: Record<string, number>;
   engineSnapshot: EngineSnapshot;
+  isDebugVisible: boolean;
   onStart: () => void;
   onStop: () => void;
   onFeedSquelchChange: (feedId: string, thresholdDb: number) => void;
+  onToggleDebug: () => void;
 }
 
 export function ConsoleView({
@@ -25,9 +27,11 @@ export function ConsoleView({
   feedPriorities,
   feedSquelchThresholdsDb,
   engineSnapshot,
+  isDebugVisible,
   onStart,
   onStop,
-  onFeedSquelchChange
+  onFeedSquelchChange,
+  onToggleDebug
 }: ConsoleViewProps) {
   const canStart = feeds.length > 0 && !engineSnapshot.running;
   const activeSpeaker = engineSnapshot.floorFeedId
@@ -40,9 +44,11 @@ export function ConsoleView({
         activeSpeaker={activeSpeaker}
         airportName={airportName}
         canStart={canStart}
+        isDebugVisible={isDebugVisible}
         isRunning={engineSnapshot.running}
         onStart={onStart}
         onStop={onStop}
+        onToggleDebug={onToggleDebug}
       />
 
       {feeds.length === 0 ? (
@@ -63,8 +69,9 @@ export function ConsoleView({
               );
             })}
           </div>
-
-          <DebugPanel engineSnapshot={engineSnapshot} feedSquelchThresholdsDb={feedSquelchThresholdsDb} feeds={feeds} />
+          {isDebugVisible ? (
+            <DebugPanel engineSnapshot={engineSnapshot} feedSquelchThresholdsDb={feedSquelchThresholdsDb} feeds={feeds} />
+          ) : null}
         </>
       )}
     </section>

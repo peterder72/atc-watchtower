@@ -1,5 +1,10 @@
 import { openDB } from 'idb';
-import { clampSquelchThresholdDb, DEFAULT_APP_STATE, type AppState } from '../domain/models';
+import {
+  clampSquelchThresholdDb,
+  DEFAULT_APP_STATE,
+  normalizeAudioProcessingSettings,
+  type AppState
+} from '../domain/models';
 
 const DB_NAME = 'atc-watchtower';
 const DB_VERSION = 2;
@@ -56,6 +61,9 @@ function migrateAppState(state: unknown): AppState {
       : DEFAULT_APP_STATE.selectedFeedIds,
     feedSquelchThresholdsDb: migrateFeedSquelchThresholdsDb(
       (candidate as { feedSquelchThresholdsDb?: unknown }).feedSquelchThresholdsDb
+    ),
+    audioProcessingSettings: normalizeAudioProcessingSettings(
+      (candidate as { audioProcessingSettings?: AppState['audioProcessingSettings'] }).audioProcessingSettings
     )
   };
 }
@@ -70,7 +78,8 @@ export function saveAppState(state: AppState): Promise<void> {
   const nextState: AppState = {
     ...state,
     selectedFeedIds: [...state.selectedFeedIds],
-    feedSquelchThresholdsDb: { ...state.feedSquelchThresholdsDb }
+    feedSquelchThresholdsDb: { ...state.feedSquelchThresholdsDb },
+    audioProcessingSettings: { ...normalizeAudioProcessingSettings(state.audioProcessingSettings) }
   };
 
   saveQueue = saveQueue.catch(() => undefined).then(async () => {

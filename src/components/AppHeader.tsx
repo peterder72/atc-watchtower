@@ -1,8 +1,10 @@
 import { cn } from '../lib/cn';
+import { Button } from './ui/common';
 import { eyebrowClass, mutedTextClass, panelClass } from './ui/styles';
 
 interface AppHeaderProps {
   activeView: 'library' | 'console';
+  onOpenSettings: () => void;
   onViewChange: (view: 'library' | 'console') => void;
 }
 
@@ -11,7 +13,7 @@ const viewLabels = {
   library: 'Library'
 } as const;
 
-export function AppHeader({ activeView, onViewChange }: AppHeaderProps) {
+export function AppHeader({ activeView, onOpenSettings, onViewChange }: AppHeaderProps) {
   return (
     <header className={cn(panelClass, 'relative overflow-hidden')}>
       <div
@@ -29,26 +31,32 @@ export function AppHeader({ activeView, onViewChange }: AppHeaderProps) {
           </p>
         </div>
 
-        <nav
-          aria-label="Primary views"
-          className="inline-flex w-fit rounded-full border border-white/10 bg-white/[0.06] p-1 backdrop-blur"
-        >
-          {(['library', 'console'] as const).map((view) => (
-            <button
-              key={view}
-              className={cn(
-                'rounded-full px-4 py-2 text-sm font-medium transition',
-                activeView === view
-                  ? 'bg-gradient-to-r from-teal to-cyan-100 text-slate-950 shadow-sm'
-                  : 'text-slate-300 hover:bg-white/5 hover:text-stone-100'
-              )}
-              type="button"
-              onClick={() => onViewChange(view)}
-            >
-              {viewLabels[view]}
-            </button>
-          ))}
-        </nav>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button variant="secondary" onClick={onOpenSettings}>
+            Settings
+          </Button>
+
+          <nav
+            aria-label="Primary views"
+            className="inline-flex w-fit rounded-full border border-white/10 bg-white/[0.06] p-1 backdrop-blur"
+          >
+            {(['library', 'console'] as const).map((view) => (
+              <button
+                key={view}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm font-medium transition',
+                  activeView === view
+                    ? 'bg-gradient-to-r from-teal to-cyan-100 text-slate-950 shadow-sm'
+                    : 'text-slate-300 hover:bg-white/5 hover:text-stone-100'
+                )}
+                type="button"
+                onClick={() => onViewChange(view)}
+              >
+                {viewLabels[view]}
+              </button>
+            ))}
+          </nav>
+        </div>
       </div>
     </header>
   );

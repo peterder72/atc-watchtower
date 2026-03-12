@@ -39,6 +39,33 @@ describe('GateDetector', () => {
     expect(detector.isGateOpen()).toBe(false);
   });
 
+  it('honors non-default attack and hang timings', () => {
+    const detector = new GateDetector({
+      attackMs: 100,
+      hangMs: 200
+    });
+
+    for (let index = 0; index < 4; index += 1) {
+      detector.processFrame('feed', frameWithAmplitude(0.2), index * DEFAULT_GATE_CONFIG.frameDurationMs);
+    }
+
+    expect(detector.isGateOpen()).toBe(false);
+
+    const openEvents = detector.processFrame('feed', frameWithAmplitude(0.2), 80);
+    expect(openEvents.some((event) => event.type === 'gate-open')).toBe(true);
+    expect(detector.isGateOpen()).toBe(true);
+
+    for (let index = 0; index < 9; index += 1) {
+      detector.processFrame('feed', frameWithAmplitude(0.0001), 100 + index * DEFAULT_GATE_CONFIG.frameDurationMs);
+    }
+
+    expect(detector.isGateOpen()).toBe(true);
+
+    const closeEvents = detector.processFrame('feed', frameWithAmplitude(0.0001), 280);
+    expect(closeEvents.some((event) => event.type === 'gate-close')).toBe(true);
+    expect(detector.isGateOpen()).toBe(false);
+  });
+
   it('closes an already-open gate when the squelch floor is raised', () => {
     const detector = new GateDetector({
       configuredFloorDb: -68

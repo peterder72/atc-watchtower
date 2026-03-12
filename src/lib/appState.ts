@@ -2,7 +2,8 @@ import {
   clampSquelchThresholdDb,
   DEFAULT_SQUELCH_THRESHOLD_DB,
   type AppState,
-  createAirportKey
+  createAirportKey,
+  normalizeAudioProcessingSettings
 } from '../domain/models';
 import { consolidateStoredPacks, listAirportEntries } from './feedPacks';
 
@@ -63,6 +64,7 @@ export function normalizeAppState(
       .map((feedId) => consolidation.feedIdMap[feedId] ?? feedId)
       .filter((feedId, index, collection) => availableFeedIds.has(feedId) && collection.indexOf(feedId) === index),
     selectedAirportKey,
-    feedSquelchThresholdsDb
+    feedSquelchThresholdsDb,
+    audioProcessingSettings: normalizeAudioProcessingSettings(previous.audioProcessingSettings)
   };
 }
