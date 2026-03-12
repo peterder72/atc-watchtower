@@ -58,6 +58,7 @@ export default function App() {
   const [isImporting, setIsImporting] = useState(false);
   const [isAudioSettingsOpen, setIsAudioSettingsOpen] = useState(false);
   const [isDebugPanelVisible, setIsDebugPanelVisible] = useState(false);
+  const [isResyncing, setIsResyncing] = useState(false);
   const [consoleFeedControls, setConsoleFeedControls] = useState<Record<string, ConsoleFeedControlState>>({});
   const engineRef = useRef<PriorityAudioEngine | null>(null);
 
@@ -275,9 +276,24 @@ export default function App() {
   };
 
   const handleStopListening = async () => {
+    setIsResyncing(false);
     await engineRef.current?.stop();
     setConsoleFeedControls({});
   };
+
+  const handleResyncAll = useCallback(async () => {
+    if (!engineRef.current || !engineSnapshot.running || isResyncing) {
+      return;
+    }
+
+    setIsResyncing(true);
+
+    try {
+      await engineRef.current.resyncAll();
+    } finally {
+      setIsResyncing(false);
+    }
+  }, [engineSnapshot.running, isResyncing]);
 
   const handleFeedPoweredChange = useCallback((feedId: string, powered: boolean) => {
     setConsoleFeedControls((previous) => {
@@ -404,7 +420,9 @@ export default function App() {
             engineSnapshot={engineSnapshot}
             isDebugVisible={isDebugPanelVisible}
             isRunning={engineSnapshot.running}
+            isResyncing={isResyncing}
             onStart={handleStartListening}
+            onResyncAll={handleResyncAll}
             onStop={handleStopListening}
             onFeedMutedChange={handleFeedMutedChange}
             onFeedPoweredChange={handleFeedPoweredChange}

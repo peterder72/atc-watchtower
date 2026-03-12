@@ -20,7 +20,9 @@ const baseRuntime: EngineFeedState = {
   gateOpen: false,
   level: 0.08,
   peak: 0.12,
-  status: 'ready'
+  status: 'ready',
+  streamDelayMs: 1400,
+  playbackDelayMs: 200
 };
 
 afterEach(() => {
@@ -104,5 +106,23 @@ describe('FeedRuntimeCard', () => {
 
     expect((screen.getByRole('button', { name: 'Power off EHEH Tower' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Mute EHEH Tower' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows measured extra lag and hover details', () => {
+    renderCard(baseRuntime);
+
+    expect(screen.getByText('1.4 s')).toBeTruthy();
+    expect(screen.getByText('1.4 s').closest('[title]')?.getAttribute('title')).toContain('Built-in monitor delay: 0.2 s');
+    expect(screen.getByText('1.4 s').closest('[title]')?.getAttribute('title')).toContain('Total heard delay: 1.6 s');
+  });
+
+  it('hides the lag panel when the browser does not expose a live edge', () => {
+    renderCard({
+      ...baseRuntime,
+      streamDelayMs: null
+    });
+
+    expect(screen.queryByText('Extra lag')).toBeNull();
+    expect(screen.queryByText('Unknown')).toBeNull();
   });
 });

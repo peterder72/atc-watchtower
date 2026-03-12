@@ -17,7 +17,9 @@ interface ConsoleViewProps {
   engineSnapshot: EngineSnapshot;
   isDebugVisible: boolean;
   isRunning: boolean;
+  isResyncing: boolean;
   onStart: () => void;
+  onResyncAll: () => void;
   onStop: () => void;
   onFeedMutedChange: (feedId: string, muted: boolean) => void;
   onFeedPoweredChange: (feedId: string, powered: boolean) => void;
@@ -34,7 +36,9 @@ export function ConsoleView({
   engineSnapshot,
   isDebugVisible,
   isRunning,
+  isResyncing,
   onStart,
+  onResyncAll,
   onStop,
   onFeedMutedChange,
   onFeedPoweredChange,
@@ -54,7 +58,9 @@ export function ConsoleView({
         canStart={canStart}
         isDebugVisible={isDebugVisible}
         isRunning={isRunning}
+        isResyncing={isResyncing}
         onStart={onStart}
+        onResyncAll={onResyncAll}
         onStop={onStop}
         onToggleDebug={onToggleDebug}
       />

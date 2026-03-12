@@ -18,8 +18,10 @@ interface MockMediaElement {
   readyState: number;
   networkState: number;
   currentTime: number;
+  duration: number;
   paused: boolean;
   src: string;
+  seekable: TimeRanges;
   pause: () => void;
   load: () => void;
   play: () => Promise<void>;
@@ -39,6 +41,12 @@ interface TestRuntime {
   filterLow: BiquadFilterNode;
   playbackDelayMs: number;
   audibleGateOpen: boolean;
+}
+
+interface CreateRuntimeOptions {
+  currentTime?: number;
+  duration?: number;
+  seekableEnd?: number | null;
 }
 
 function createSelection(feedId: string, priority: number, order: number): FeedSelection {
@@ -89,12 +97,36 @@ function createDelayNode(initialValue = 0): DelayNode {
   } as unknown as DelayNode;
 }
 
+function createTimeRanges(ranges: Array<{ start: number; end: number }>): TimeRanges {
+  return {
+    length: ranges.length,
+    start(index: number) {
+      const range = ranges[index];
+      if (!range) {
+        throw new RangeError(`No range at index ${index}.`);
+      }
+
+      return range.start;
+    },
+    end(index: number) {
+      const range = ranges[index];
+      if (!range) {
+        throw new RangeError(`No range at index ${index}.`);
+      }
+
+      return range.end;
+    }
+  } as TimeRanges;
+}
+
 function createRuntime(
   engine: PriorityAudioEngine,
   selection: FeedSelection,
   amplitudeRef: { value: number },
-  configuredFloorDb = DEFAULT_SQUELCH_THRESHOLD_DB
+  configuredFloorDb = DEFAULT_SQUELCH_THRESHOLD_DB,
+  options: CreateRuntimeOptions = {}
 ) {
+  const { currentTime = 0, duration = Number.NaN, seekableEnd = null } = options;
   const audioProcessingSettings =
     (engine as unknown as { audioProcessingSettings: AudioProcessingSettings }).audioProcessingSettings ??
     DEFAULT_AUDIO_PROCESSING_SETTINGS;
@@ -102,9 +134,11 @@ function createRuntime(
   const element = {} as MockMediaElement;
   element.readyState = HTMLMediaElement.HAVE_NOTHING;
   element.networkState = HTMLMediaElement.NETWORK_EMPTY;
-  element.currentTime = 0;
+  element.currentTime = currentTime;
+  element.duration = duration;
   element.paused = false;
   element.src = selection.feed.streamUrl;
+  element.seekable = seekableEnd === null ? createTimeRanges([]) : createTimeRanges([{ start: 0, end: seekableEnd }]);
   element.pause = vi.fn(() => {
     element.paused = true;
   });
@@ -132,6 +166,8 @@ function createRuntime(
     readyState: element.readyState,
     networkState: element.networkState,
     currentTime: element.currentTime,
+    streamDelayMs: null,
+    playbackDelayMs,
     paused: element.paused,
     captureTrackCount: 0,
     debug: 'media element graph active'
@@ -304,6 +340,37 @@ describe('PriorityAudioEngine', () => {
 
     expect(snapshots).toHaveLength(3);
     expect(snapshots[2].feeds.tower.currentTime).toBe(0.3);
+  });
+
+  it('reports stream delay from a seekable live edge and includes playback delay in snapshots', () => {
+    const engine = new PriorityAudioEngine();
+    const amplitudeRef = { value: 0 };
+
+    createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef, 0, {
+      currentTime: 10,
+      duration: Number.POSITIVE_INFINITY,
+      seekableEnd: 14.2
+    });
+
+    runAnalysis(engine, ANALYSIS_INTERVAL_MS);
+
+    expect(engine.getSnapshot().feeds.tower.streamDelayMs).toBe(4200);
+    expect(engine.getSnapshot().feeds.tower.playbackDelayMs).toBe(200);
+  });
+
+  it('reports null stream delay when the browser does not expose a trustworthy live edge', () => {
+    const engine = new PriorityAudioEngine();
+    const amplitudeRef = { value: 0.01 };
+
+    createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef, 0, {
+      currentTime: 90,
+      duration: 120,
+      seekableEnd: 100
+    });
+
+    runAnalysis(engine, METER_SNAPSHOT_INTERVAL_MS);
+
+    expect(engine.getSnapshot().feeds.tower.streamDelayMs).toBeNull();
   });
 
   it('delays higher-priority preemption until the delayed audio reaches the speakers', () => {
@@ -483,6 +550,59 @@ describe('PriorityAudioEngine', () => {
     runAnalysis(engine, 240);
     expect(engine.getSnapshot().floorFeedId).toBe('tower');
     expect(runtime.state.isFloor).toBe(true);
+  });
+
+  it('resyncs seekable feeds to live edge, reconnects non-seekable feeds, and clears pending delayed openings', async () => {
+    const engine = new PriorityAudioEngine();
+    const towerAmplitude = { value: 0.2 };
+    const groundAmplitude = { value: 0.2 };
+    const { element: towerElement, runtime: towerRuntime } = createRuntime(
+      engine,
+      createSelection('tower', 1, 0),
+      towerAmplitude,
+      DEFAULT_SQUELCH_THRESHOLD_DB,
+      {
+        currentTime: 12,
+        duration: Number.POSITIVE_INFINITY,
+        seekableEnd: 15
+      }
+    );
+    const { element: groundElement, runtime: groundRuntime } = createRuntime(
+      engine,
+      createSelection('ground', 2, 1),
+      groundAmplitude
+    );
+
+    runAnalysis(engine, 20);
+    runAnalysis(engine, 40);
+    runAnalysis(engine, 60);
+
+    expect(towerRuntime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    engine.setFeedMuted('ground', true);
+
+    await engine.resyncAll();
+
+    expect(towerElement.currentTime).toBe(15);
+    expect(towerRuntime.state.gateOpen).toBe(false);
+    expect(towerRuntime.state.level).toBe(0);
+    expect(towerRuntime.state.peak).toBe(0);
+    expect(towerRuntime.state.isFloor).toBe(false);
+    expect(towerRuntime.state.powered).toBe(true);
+
+    expect(groundRuntime.state.muted).toBe(true);
+    expect(groundRuntime.state.powered).toBe(true);
+    expect(groundRuntime.state.gateOpen).toBe(false);
+    expect(groundElement.pause).toHaveBeenCalledTimes(1);
+    expect(groundElement.load).toHaveBeenCalledTimes(1);
+    expect(groundElement.play).toHaveBeenCalledTimes(1);
+
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    runAnalysis(engine, 200);
+
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
   });
 
   it('keeps delayed audio tails audible when hang time is shorter than playback delay', () => {

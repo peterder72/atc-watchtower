@@ -30,6 +30,8 @@ const runningSnapshot: EngineSnapshot = {
       status: 'idle',
       analysisMode: 'graph',
       currentTime: 0,
+      streamDelayMs: null,
+      playbackDelayMs: 200,
       paused: false,
       captureTrackCount: 0,
       debug: 'waiting for stream data'
@@ -54,7 +56,9 @@ function ConsoleViewHarness() {
       engineSnapshot={runningSnapshot}
       isDebugVisible={isDebugVisible}
       isRunning={runningSnapshot.running}
+      isResyncing={false}
       onStart={vi.fn()}
+      onResyncAll={vi.fn()}
       onStop={vi.fn()}
       onFeedMutedChange={vi.fn()}
       onFeedPoweredChange={vi.fn()}
@@ -91,7 +95,9 @@ describe('ConsoleView', () => {
         engineSnapshot={runningSnapshot}
         isDebugVisible={false}
         isRunning={runningSnapshot.running}
+        isResyncing={false}
         onStart={vi.fn()}
+        onResyncAll={vi.fn()}
         onStop={vi.fn()}
         onFeedMutedChange={onFeedMutedChange}
         onFeedPoweredChange={onFeedPoweredChange}
@@ -105,5 +111,56 @@ describe('ConsoleView', () => {
 
     expect(onFeedPoweredChange).toHaveBeenCalledWith('tower', false);
     expect(onFeedMutedChange).toHaveBeenCalledWith('tower', true);
+  });
+
+  it('wires the resync control and disables it when not running', () => {
+    const onResyncAll = vi.fn();
+
+    const { rerender } = render(
+      <ConsoleView
+        airportName="EHEH"
+        feeds={feeds}
+        feedControls={{ tower: { powered: true, muted: false } }}
+        feedPriorities={{ tower: 1 }}
+        feedSquelchThresholdsDb={{}}
+        engineSnapshot={runningSnapshot}
+        isDebugVisible={false}
+        isRunning={runningSnapshot.running}
+        isResyncing={false}
+        onStart={vi.fn()}
+        onResyncAll={onResyncAll}
+        onStop={vi.fn()}
+        onFeedMutedChange={vi.fn()}
+        onFeedPoweredChange={vi.fn()}
+        onFeedSquelchChange={vi.fn()}
+        onToggleDebug={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resync all' }));
+    expect(onResyncAll).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ConsoleView
+        airportName="EHEH"
+        feeds={feeds}
+        feedControls={{ tower: { powered: true, muted: false } }}
+        feedPriorities={{ tower: 1 }}
+        feedSquelchThresholdsDb={{}}
+        engineSnapshot={{ ...runningSnapshot, running: false }}
+        isDebugVisible={false}
+        isRunning={false}
+        isResyncing={false}
+        onStart={vi.fn()}
+        onResyncAll={onResyncAll}
+        onStop={vi.fn()}
+        onFeedMutedChange={vi.fn()}
+        onFeedPoweredChange={vi.fn()}
+        onFeedSquelchChange={vi.fn()}
+        onToggleDebug={vi.fn()}
+      />
+    );
+
+    expect((screen.getByRole('button', { name: 'Resync all' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

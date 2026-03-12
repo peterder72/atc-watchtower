@@ -42,6 +42,7 @@ type SnapshotListener = (snapshot: EngineSnapshot) => void;
 export const ANALYSIS_INTERVAL_MS = 20;
 export const METER_SNAPSHOT_INTERVAL_MS = 50;
 const CURRENT_TIME_SNAPSHOT_DELTA_S = 0.25;
+const STREAM_DELAY_SNAPSHOT_DELTA_MS = 250;
 const LEVEL_EPSILON = 0.002;
 const MIN_PLAYBACK_DELAY_MS = 200;
 const PLAYBACK_DELAY_PADDING_MS = 100;
@@ -77,6 +78,45 @@ function describeMediaError(error: MediaError | null): string {
     default:
       return 'Failed to play stream.';
   }
+}
+
+function getSeekableLiveEdge(element: HTMLMediaElement): number | null {
+  if (Number.isFinite(element.duration) || element.seekable.length === 0) {
+    return null;
+  }
+
+  try {
+    const liveEdge = element.seekable.end(element.seekable.length - 1);
+    return Number.isFinite(liveEdge) ? liveEdge : null;
+  } catch {
+    return null;
+  }
+}
+
+function measureStreamDelayMs(element: HTMLMediaElement): number | null {
+  const liveEdge = getSeekableLiveEdge(element);
+
+  if (liveEdge === null || !Number.isFinite(element.currentTime)) {
+    return null;
+  }
+
+  return Math.max(0, Math.round((liveEdge - element.currentTime) * 1000));
+}
+
+function hasStreamDelayChanged(previousDelayMs: number | null | undefined, nextDelayMs: number | null): boolean {
+  if ((previousDelayMs === null || previousDelayMs === undefined) && nextDelayMs === null) {
+    return false;
+  }
+
+  if (previousDelayMs === nextDelayMs) {
+    return false;
+  }
+
+  if (previousDelayMs === null || previousDelayMs === undefined || nextDelayMs === null) {
+    return true;
+  }
+
+  return Math.abs(previousDelayMs - nextDelayMs) >= STREAM_DELAY_SNAPSHOT_DELTA_MS;
 }
 
 export class PriorityAudioEngine {
@@ -194,6 +234,58 @@ export class PriorityAudioEngine {
     this.emitSnapshot();
   }
 
+  async resyncAll(): Promise<void> {
+    if (!this.running) {
+      return;
+    }
+
+    const now = performance.now();
+    const resyncTasks: Promise<void>[] = [];
+
+    this.pendingStrategyEvents = [];
+    this.nextPendingStrategySequence = 0;
+    this.strategy.reset();
+    this.floorFeedId = null;
+
+    for (const runtime of this.runtimes.values()) {
+      this.strategy.registerFeed(runtime.selection.feed.id, runtime.selection.priority, runtime.selection.order);
+
+      if (!runtime.state.powered) {
+        runtime.state.isFloor = false;
+        runtime.audibleGateOpen = false;
+        continue;
+      }
+
+      this.resetRuntimeAfterResync(runtime);
+
+      const liveEdge = getSeekableLiveEdge(runtime.element);
+      if (liveEdge !== null) {
+        try {
+          runtime.element.currentTime = liveEdge;
+          this.updateRuntimeElementState(runtime);
+          runtime.state.debug = runtime.state.muted ? 'feed muted · resyncing to live edge' : 'resyncing to live edge';
+
+          if (runtime.element.paused) {
+            resyncTasks.push(this.playRuntimeElement(runtime));
+          }
+
+          continue;
+        } catch {
+          // Fall back to a reconnect when live-edge seeking is not supported.
+        }
+      }
+
+      runtime.state.debug = runtime.state.muted ? 'feed muted · reconnecting stream' : 'reconnecting stream';
+      resyncTasks.push(this.restartRuntimePlayback(runtime));
+    }
+
+    this.applyFloorState(now);
+
+    if (resyncTasks.length > 0) {
+      await Promise.all(resyncTasks);
+    }
+  }
+
   setPriorities(priorities: Record<string, number>): void {
     for (const runtime of this.runtimes.values()) {
       const nextPriority = priorities[runtime.selection.feed.id];
@@ -227,6 +319,7 @@ export class PriorityAudioEngine {
       runtime.gateDetector.updateConfig(nextSettings);
       if (nextPlaybackDelayMs !== runtime.playbackDelayMs) {
         runtime.playbackDelayMs = nextPlaybackDelayMs;
+        runtime.state.playbackDelayMs = nextPlaybackDelayMs;
         this.updateDelayNode(runtime, audioNow);
       }
     }
@@ -362,6 +455,8 @@ export class PriorityAudioEngine {
     runtime.state.readyState = runtime.element.readyState;
     runtime.state.networkState = runtime.element.networkState;
     runtime.state.currentTime = runtime.element.currentTime;
+    runtime.state.streamDelayMs = measureStreamDelayMs(runtime.element);
+    runtime.state.playbackDelayMs = runtime.playbackDelayMs;
     runtime.state.paused = runtime.element.paused;
   }
 
@@ -392,12 +487,10 @@ export class PriorityAudioEngine {
     this.updateRuntimeElementState(runtime);
   }
 
-  private startRuntimePlayback(runtime: FeedRuntime): void {
-    runtime.element.src = runtime.selection.feed.streamUrl;
-    runtime.element.load();
-    this.updateRuntimeElementState(runtime);
-
-    void runtime.element.play().catch((error) => {
+  private async playRuntimeElement(runtime: FeedRuntime): Promise<void> {
+    try {
+      await runtime.element.play();
+    } catch (error) {
       if (!runtime.state.powered) {
         return;
       }
@@ -407,7 +500,31 @@ export class PriorityAudioEngine {
       this.updateRuntimeElementState(runtime);
       runtime.state.debug = 'play() rejected';
       this.emitSnapshot([runtime.selection.feed.id]);
-    });
+    }
+  }
+
+  private async restartRuntimePlayback(runtime: FeedRuntime): Promise<void> {
+    runtime.element.pause();
+    runtime.element.src = runtime.selection.feed.streamUrl;
+    runtime.element.load();
+    this.updateRuntimeElementState(runtime);
+    await this.playRuntimeElement(runtime);
+  }
+
+  private startRuntimePlayback(runtime: FeedRuntime): void {
+    void this.restartRuntimePlayback(runtime);
+  }
+
+  private resetRuntimeAfterResync(runtime: FeedRuntime): void {
+    this.clearPendingStrategyEvents(runtime.selection.feed.id);
+    runtime.state.isFloor = false;
+    runtime.state.gateOpen = false;
+    runtime.state.level = 0;
+    runtime.state.peak = 0;
+    runtime.state.status = 'buffering';
+    runtime.state.error = undefined;
+    runtime.gateDetector = this.createGateDetector(runtime.selection.feed.id);
+    runtime.audibleGateOpen = false;
   }
 
   private getFeedSquelchThresholdDb(feedId: string): number {
@@ -579,6 +696,8 @@ export class PriorityAudioEngine {
       readyState: element.readyState,
       networkState: element.networkState,
       currentTime: element.currentTime,
+      streamDelayMs: null,
+      playbackDelayMs: this.getPlaybackDelayMs(),
       paused: element.paused,
       captureTrackCount: 0,
       debug: 'media element graph active'
@@ -684,12 +803,18 @@ export class PriorityAudioEngine {
         continue;
       }
 
-      const previousCurrentTime = this.snapshot.feeds[runtime.selection.feed.id]?.currentTime;
+      const previousFeedSnapshot = this.snapshot.feeds[runtime.selection.feed.id];
+      const previousCurrentTime = previousFeedSnapshot?.currentTime;
       if (
         previousCurrentTime !== undefined &&
         runtime.state.currentTime !== undefined &&
         Math.abs(runtime.state.currentTime - previousCurrentTime) >= CURRENT_TIME_SNAPSHOT_DELTA_S
       ) {
+        changedFeedIds.add(runtime.selection.feed.id);
+        clockChanged = true;
+      }
+
+      if (hasStreamDelayChanged(previousFeedSnapshot?.streamDelayMs, runtime.state.streamDelayMs)) {
         changedFeedIds.add(runtime.selection.feed.id);
         clockChanged = true;
       }

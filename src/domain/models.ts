@@ -85,6 +85,8 @@ export interface EngineFeedState {
   readyState?: number;
   networkState?: number;
   currentTime?: number;
+  streamDelayMs: number | null;
+  playbackDelayMs: number;
   paused?: boolean;
   debug?: string;
   captureTrackCount?: number;

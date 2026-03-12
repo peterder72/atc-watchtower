@@ -6,7 +6,9 @@ interface ConsoleToolbarProps {
   canStart: boolean;
   isDebugVisible: boolean;
   isRunning: boolean;
+  isResyncing: boolean;
   onStart: () => void;
+  onResyncAll: () => void;
   onStop: () => void;
   onToggleDebug: () => void;
 }
@@ -17,7 +19,9 @@ export function ConsoleToolbar({
   canStart,
   isDebugVisible,
   isRunning,
+  isResyncing,
   onStart,
+  onResyncAll,
   onStop,
   onToggleDebug
 }: ConsoleToolbarProps) {
@@ -30,6 +34,9 @@ export function ConsoleToolbar({
           </Button>
           <Button disabled={!isRunning} variant="secondary" onClick={onStop}>
             Stop
+          </Button>
+          <Button disabled={!isRunning || isResyncing} variant="secondary" onClick={onResyncAll}>
+            {isResyncing ? 'Resyncing...' : 'Resync all'}
           </Button>
           <Button disabled={!canStart} onClick={onStart}>
             Start listening

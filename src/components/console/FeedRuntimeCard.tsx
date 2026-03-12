@@ -33,6 +33,18 @@ function formatDb(value: number): string {
   return `${value} dB`;
 }
 
+function formatSecondsFromMs(valueMs: number): string {
+  const valueSeconds = valueMs / 1000;
+  return `${valueSeconds.toFixed(valueSeconds >= 10 ? 0 : 1)} s`;
+}
+
+function getDelayDetails(streamDelayMs: number, playbackDelayMs: number): string {
+  const extraLag = formatSecondsFromMs(streamDelayMs);
+  const builtInDelay = formatSecondsFromMs(playbackDelayMs);
+  const totalDelay = formatSecondsFromMs(streamDelayMs + playbackDelayMs);
+  return `Extra stream lag: ${extraLag}\nBuilt-in monitor delay: ${builtInDelay}\nTotal heard delay: ${totalDelay}`;
+}
+
 export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   controls,
   controlsDisabled,
@@ -49,6 +61,11 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   const level = runtime ? Math.min(runtime.peak * 600, 100) : 0;
   const gateStatusTone = runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'warning' : 'neutral';
   const runtimeStatusTone = runtime?.status === 'error' ? 'danger' : 'neutral';
+  const measuredDelayMs = runtime?.streamDelayMs;
+  const delayDetails =
+    runtime && measuredDelayMs !== null && measuredDelayMs !== undefined
+      ? getDelayDetails(measuredDelayMs, runtime.playbackDelayMs)
+      : null;
 
   return (
     <article
@@ -74,6 +91,16 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
         {!powered ? <StatusPill tone="danger">Powered off</StatusPill> : null}
         {muted ? <StatusPill tone="warning">Muted</StatusPill> : null}
       </div>
+
+      {delayDetails ? (
+        <div className={cn(insetBlockClass, 'grid gap-2')} title={delayDetails ?? undefined}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Extra lag</span>
+            <strong className="text-sm font-semibold text-stone-100">{formatSecondsFromMs(measuredDelayMs)}</strong>
+          </div>
+          <p className="text-xs text-slate-400">Behind live edge when the browser exposes it.</p>
+        </div>
+      ) : null}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <Button
