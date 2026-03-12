@@ -38,4 +38,31 @@ describe('GateDetector', () => {
     expect(events.some((event) => event.type === 'gate-open')).toBe(false);
     expect(detector.isGateOpen()).toBe(false);
   });
+
+  it('closes an already-open gate when the squelch floor is raised', () => {
+    const detector = new GateDetector({
+      configuredFloorDb: -68
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+      detector.processFrame('feed', frameWithAmplitude(0.004), index * DEFAULT_GATE_CONFIG.frameDurationMs);
+    }
+
+    expect(detector.isGateOpen()).toBe(true);
+
+    detector.setConfiguredFloorDb(-35);
+
+    let closeEvents = 0;
+    for (let index = 0; index < 20; index += 1) {
+      const result = detector.processFrame(
+        'feed',
+        frameWithAmplitude(0.004),
+        (index + 3) * DEFAULT_GATE_CONFIG.frameDurationMs
+      );
+      closeEvents += result.filter((event) => event.type === 'gate-close').length;
+    }
+
+    expect(closeEvents).toBe(1);
+    expect(detector.isGateOpen()).toBe(false);
+  });
 });

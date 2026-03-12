@@ -4,6 +4,8 @@ import { ConsoleView } from './components/ConsoleView';
 import { LibraryView } from './components/LibraryView';
 import { PriorityAudioEngine } from './audio/priorityAudioEngine';
 import {
+  clampSquelchThresholdDb,
+  DEFAULT_SQUELCH_THRESHOLD_DB,
   DEFAULT_APP_STATE,
   type AppState,
   createAirportKey,
@@ -79,6 +81,7 @@ export default function App() {
   const [appState, setAppState] = useState(DEFAULT_APP_STATE);
   const [activeView, setActiveView] = useState<'library' | 'console'>('library');
   const [engineSnapshot, setEngineSnapshot] = useState<EngineSnapshot>(EMPTY_ENGINE_SNAPSHOT);
+  const [feedSquelchThresholdsDb, setFeedSquelchThresholdsDb] = useState<Record<string, number>>({});
   const [importNotices, setImportNotices] = useState<ImportNotice[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -127,10 +130,23 @@ export default function App() {
 
   const airports = useMemo(() => listAirportEntries(appState.packs), [appState.packs]);
   const feedPriorities = useMemo(() => createPriorityMapForPacks(appState.packs), [appState.packs]);
+  const activeFeedSquelchThresholdsDb = useMemo(() => {
+    const availableFeedIds = new Set(
+      appState.packs.flatMap((pack) => pack.airports.flatMap((airport) => airport.feeds.map((feed) => feed.id)))
+    );
+
+    return Object.fromEntries(
+      Object.entries(feedSquelchThresholdsDb).filter(([feedId]) => availableFeedIds.has(feedId))
+    );
+  }, [appState.packs, feedSquelchThresholdsDb]);
 
   useEffect(() => {
     engineRef.current?.setPriorities(feedPriorities);
   }, [feedPriorities]);
+
+  useEffect(() => {
+    engineRef.current?.setFeedSquelchThresholds(activeFeedSquelchThresholdsDb);
+  }, [activeFeedSquelchThresholdsDb]);
 
   const selectedAirport = useMemo(
     () => airports.find((entry) => entry.key === appState.selectedAirportKey) ?? airports[0] ?? null,
@@ -249,6 +265,31 @@ export default function App() {
     );
   };
 
+  const handleFeedSquelchChange = (feedId: string, thresholdDb: number) => {
+    const nextThresholdDb = clampSquelchThresholdDb(thresholdDb);
+
+    setFeedSquelchThresholdsDb((previous) => {
+      if (nextThresholdDb === DEFAULT_SQUELCH_THRESHOLD_DB) {
+        if (previous[feedId] === undefined) {
+          return previous;
+        }
+
+        const nextThresholds = { ...previous };
+        delete nextThresholds[feedId];
+        return nextThresholds;
+      }
+
+      if (previous[feedId] === nextThresholdDb) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [feedId]: nextThresholdDb
+      };
+    });
+  };
+
   const handleStartListening = async () => {
     if (!engineRef.current || selectedFeeds.length === 0) {
       return;
@@ -334,9 +375,11 @@ export default function App() {
             airportName={selectedAirport ? formatAirportLabel(selectedAirport.airport, selectedAirport.packName) : ''}
             feeds={selectedFeeds}
             feedPriorities={feedPriorities}
+            feedSquelchThresholdsDb={activeFeedSquelchThresholdsDb}
             engineSnapshot={engineSnapshot}
             onStart={handleStartListening}
             onStop={handleStopListening}
+            onFeedSquelchChange={handleFeedSquelchChange}
           />
         )}
       </main>

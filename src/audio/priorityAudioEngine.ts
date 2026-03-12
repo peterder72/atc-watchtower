@@ -1,4 +1,9 @@
-import type { EngineFeedState, EngineSnapshot, FeedSelection } from '../domain/models';
+import {
+  DEFAULT_SQUELCH_THRESHOLD_DB,
+  type EngineFeedState,
+  type EngineSnapshot,
+  type FeedSelection
+} from '../domain/models';
 import { GateDetector, summarizeFrame } from './gateDetector';
 import { PriorityStrategy } from './priorityStrategy';
 
@@ -63,6 +68,8 @@ export class PriorityAudioEngine {
   private floorFeedId: string | null = null;
 
   private analysisTimerId: number | null = null;
+
+  private feedSquelchThresholdsDb: Record<string, number> = {};
 
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener);
@@ -152,6 +159,14 @@ export class PriorityAudioEngine {
     this.applyFloorState();
   }
 
+  setFeedSquelchThresholds(thresholdsDb: Record<string, number>): void {
+    this.feedSquelchThresholdsDb = { ...thresholdsDb };
+
+    for (const runtime of this.runtimes.values()) {
+      runtime.gateDetector.setConfiguredFloorDb(this.getFeedSquelchThresholdDb(runtime.selection.feed.id));
+    }
+  }
+
   private buildSnapshot(): EngineSnapshot {
     const feeds = Object.fromEntries(
       [...this.runtimes.entries()].map(([feedId, runtime]) => [feedId, { ...runtime.state }])
@@ -169,6 +184,10 @@ export class PriorityAudioEngine {
     for (const listener of this.listeners) {
       listener(snapshot);
     }
+  }
+
+  private getFeedSquelchThresholdDb(feedId: string): number {
+    return this.feedSquelchThresholdsDb[feedId] ?? DEFAULT_SQUELCH_THRESHOLD_DB;
   }
 
   private attachFeed(selection: FeedSelection): void {
@@ -237,7 +256,7 @@ export class PriorityAudioEngine {
       ),
       gateDetector: new GateDetector({
         frameDurationMs: (analyzerNode.fftSize / this.context.sampleRate) * 1000,
-        configuredFloorDb: -68,
+        configuredFloorDb: this.getFeedSquelchThresholdDb(selection.feed.id),
         openDeltaDb: 7,
         closeGapDb: 4
       }),

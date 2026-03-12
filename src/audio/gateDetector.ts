@@ -66,16 +66,23 @@ export class GateDetector {
 
   private nextLevelEmitAt = 0;
 
+  private configuredFloorDb: number;
+
   constructor(config: Partial<GateDetectorConfig> = {}) {
     this.config = { ...DEFAULT_GATE_CONFIG, ...config };
     this.noiseFloorDb = this.config.initialNoiseFloorDb;
+    this.configuredFloorDb = this.config.configuredFloorDb;
+  }
+
+  setConfiguredFloorDb(value: number): void {
+    this.configuredFloorDb = value;
   }
 
   processFrame(feedId: string, samples: ArrayLike<number>, at: number): FeedActivityEvent[] {
     const events: FeedActivityEvent[] = [];
     const { rms, peak, rmsDb, peakDb } = summarizeFrame(samples);
 
-    const openThreshold = Math.max(this.noiseFloorDb + this.config.openDeltaDb, this.config.configuredFloorDb);
+    const openThreshold = Math.max(this.noiseFloorDb + this.config.openDeltaDb, this.configuredFloorDb);
     const closeThreshold = openThreshold - this.config.closeGapDb;
     const aboveOpenThreshold = rmsDb >= openThreshold || peakDb >= openThreshold + 3;
 

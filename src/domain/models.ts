@@ -98,6 +98,18 @@ export interface AirportEntry {
   packName: string;
 }
 
+export const MIN_SQUELCH_THRESHOLD_DB = -80;
+export const MAX_SQUELCH_THRESHOLD_DB = -30;
+export const DEFAULT_SQUELCH_THRESHOLD_DB = -68;
+
+export function clampSquelchThresholdDb(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_SQUELCH_THRESHOLD_DB;
+  }
+
+  return Math.min(MAX_SQUELCH_THRESHOLD_DB, Math.max(MIN_SQUELCH_THRESHOLD_DB, Math.round(value)));
+}
+
 export const DEFAULT_APP_STATE: AppState = {
   packs: [],
   selectedAirportKey: null,

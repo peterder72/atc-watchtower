@@ -18,8 +18,9 @@
 7. Reorder feeds with drag-and-drop so `P1` is always the top row.
 8. Start a shared `AudioContext`.
 9. Attach each feed to both playback and analysis branches.
-10. Use adaptive gate detection to infer transmission windows.
-11. Apply `PriorityStrategy` so only the highest-priority active feed is audible.
+10. Adjust per-feed squelch in the console when a stream carries steady idle noise.
+11. Use adaptive gate detection plus the feed's user-set squelch floor to infer transmission windows.
+12. Apply `PriorityStrategy` so only the highest-priority active feed is audible.
 
 ## Canonical Interfaces
 
@@ -74,6 +75,7 @@ interface ArbitrationStrategy {
   - samples short time-domain windows from the analyser branch
   - tracks RMS and peak values
   - maintains a rolling noise floor while closed
+  - applies a per-feed user squelch floor before opening the gate
   - opens after 60 ms above threshold
   - closes after 400 ms below threshold
   - preserves 200 ms of pre-roll for later segment capture features
