@@ -44,6 +44,7 @@ export interface AppState {
   packs: StoredFeedPack[];
   selectedAirportKey: string | null;
   selectedFeedIds: string[];
+  feedSquelchThresholdsDb: Record<string, number>;
 }
 
 export interface FeedValidationResult {
@@ -113,7 +114,8 @@ export function clampSquelchThresholdDb(value: number): number {
 export const DEFAULT_APP_STATE: AppState = {
   packs: [],
   selectedAirportKey: null,
-  selectedFeedIds: []
+  selectedFeedIds: [],
+  feedSquelchThresholdsDb: {}
 };
 
 export function createAirportKey(packId: string, icao: string): string {

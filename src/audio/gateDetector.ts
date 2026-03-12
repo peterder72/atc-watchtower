@@ -78,9 +78,10 @@ export class GateDetector {
     this.configuredFloorDb = value;
   }
 
-  processFrame(feedId: string, samples: ArrayLike<number>, at: number): FeedActivityEvent[] {
+  processFrame(feedId: string, samples: ArrayLike<number>, at: number, elapsedMs = this.config.frameDurationMs): FeedActivityEvent[] {
     const events: FeedActivityEvent[] = [];
     const { rms, peak, rmsDb, peakDb } = summarizeFrame(samples);
+    const effectiveElapsedMs = Number.isFinite(elapsedMs) && elapsedMs > 0 ? elapsedMs : this.config.frameDurationMs;
 
     const openThreshold = Math.max(this.noiseFloorDb + this.config.openDeltaDb, this.configuredFloorDb);
     const closeThreshold = openThreshold - this.config.closeGapDb;
@@ -94,7 +95,7 @@ export class GateDetector {
       }
 
       if (aboveOpenThreshold) {
-        this.attackAccumMs += this.config.frameDurationMs;
+        this.attackAccumMs += effectiveElapsedMs;
         if (this.attackAccumMs >= this.config.attackMs) {
           this.gateOpen = true;
           this.attackAccumMs = 0;
@@ -108,7 +109,7 @@ export class GateDetector {
       const belowCloseThreshold = rmsDb < closeThreshold && peakDb < closeThreshold + 3;
 
       if (belowCloseThreshold) {
-        this.silenceAccumMs += this.config.frameDurationMs;
+        this.silenceAccumMs += effectiveElapsedMs;
         if (this.silenceAccumMs >= this.config.hangMs) {
           this.gateOpen = false;
           this.silenceAccumMs = 0;

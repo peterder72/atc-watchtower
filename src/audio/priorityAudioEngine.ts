@@ -22,8 +22,15 @@ interface FeedRuntime {
 
 type SnapshotListener = (snapshot: EngineSnapshot) => void;
 
-const ANALYSIS_INTERVAL_MS = 50;
+export const ANALYSIS_INTERVAL_MS = 20;
+export const METER_SNAPSHOT_INTERVAL_MS = 50;
+const CURRENT_TIME_SNAPSHOT_DELTA_S = 0.25;
 const LEVEL_EPSILON = 0.002;
+const EMPTY_ENGINE_SNAPSHOT: EngineSnapshot = {
+  running: false,
+  floorFeedId: null,
+  feeds: {}
+};
 
 function stripPrioritySuffix(debug: string | undefined): string {
   if (!debug) {
@@ -67,18 +74,24 @@ export class PriorityAudioEngine {
 
   private floorFeedId: string | null = null;
 
+  private snapshot: EngineSnapshot = EMPTY_ENGINE_SNAPSHOT;
+
   private analysisTimerId: number | null = null;
 
   private feedSquelchThresholdsDb: Record<string, number> = {};
 
+  private lastAnalysisAt: number | null = null;
+
+  private lastSnapshotAt = 0;
+
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener);
-    listener(this.buildSnapshot());
+    listener(this.snapshot);
     return () => this.listeners.delete(listener);
   }
 
   getSnapshot(): EngineSnapshot {
-    return this.buildSnapshot();
+    return this.snapshot;
   }
 
   async start(selections: FeedSelection[]): Promise<void> {
@@ -99,6 +112,8 @@ export class PriorityAudioEngine {
 
     this.running = true;
     this.floorFeedId = null;
+    this.lastAnalysisAt = null;
+    this.lastSnapshotAt = 0;
     this.strategy.reset();
 
     selections.forEach((selection) => this.attachFeed(selection));
@@ -141,6 +156,7 @@ export class PriorityAudioEngine {
     this.masterGain = null;
     this.running = false;
     this.floorFeedId = null;
+    this.lastAnalysisAt = null;
     this.emitSnapshot();
   }
 
@@ -167,9 +183,15 @@ export class PriorityAudioEngine {
     }
   }
 
-  private buildSnapshot(): EngineSnapshot {
+  private buildSnapshot(changedFeedIds?: Iterable<string>): EngineSnapshot {
+    const changedFeedIdSet = changedFeedIds ? new Set(changedFeedIds) : null;
     const feeds = Object.fromEntries(
-      [...this.runtimes.entries()].map(([feedId, runtime]) => [feedId, { ...runtime.state }])
+      [...this.runtimes.entries()].map(([feedId, runtime]) => [
+        feedId,
+        !changedFeedIdSet || changedFeedIdSet.has(feedId) || !this.snapshot.feeds[feedId]
+          ? { ...runtime.state }
+          : this.snapshot.feeds[feedId]
+      ])
     );
 
     return {
@@ -179,8 +201,10 @@ export class PriorityAudioEngine {
     };
   }
 
-  private emitSnapshot(): void {
-    const snapshot = this.buildSnapshot();
+  private emitSnapshot(changedFeedIds?: Iterable<string>, at = performance.now()): void {
+    const snapshot = this.buildSnapshot(changedFeedIds);
+    this.snapshot = snapshot;
+    this.lastSnapshotAt = at;
     for (const listener of this.listeners) {
       listener(snapshot);
     }
@@ -255,7 +279,7 @@ export class PriorityAudioEngine {
         new ArrayBuffer(analyzerNode.fftSize * Float32Array.BYTES_PER_ELEMENT)
       ),
       gateDetector: new GateDetector({
-        frameDurationMs: (analyzerNode.fftSize / this.context.sampleRate) * 1000,
+        frameDurationMs: ANALYSIS_INTERVAL_MS,
         configuredFloorDb: this.getFeedSquelchThresholdDb(selection.feed.id),
         openDeltaDb: 7,
         closeGapDb: 4
@@ -274,7 +298,7 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
       runtime.state.debug = 'receiving decoded audio';
-      this.emitSnapshot();
+      this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('canplay', () => {
@@ -284,7 +308,7 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
       runtime.state.debug = 'decoder ready';
-      this.emitSnapshot();
+      this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('waiting', () => {
@@ -294,7 +318,7 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
       runtime.state.debug = 'waiting for stream data';
-      this.emitSnapshot();
+      this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('stalled', () => {
@@ -304,7 +328,7 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
       runtime.state.debug = 'stream stalled';
-      this.emitSnapshot();
+      this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('error', () => {
@@ -315,7 +339,7 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
       runtime.state.debug = `media error code ${runtime.element.error?.code ?? 'unknown'}`;
-      this.emitSnapshot();
+      this.emitSnapshot([selection.feed.id]);
     });
 
     void element.play().catch((error) => {
@@ -326,12 +350,18 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
       runtime.state.debug = 'play() rejected';
-      this.emitSnapshot();
+      this.emitSnapshot([selection.feed.id]);
     });
   }
 
-  private sampleAnalysis(): void {
-    let snapshotChanged = false;
+  private sampleAnalysis(now = performance.now()): void {
+    const elapsedMs = this.lastAnalysisAt === null ? ANALYSIS_INTERVAL_MS : Math.max(1, now - this.lastAnalysisAt);
+    this.lastAnalysisAt = now;
+
+    const changedFeedIds = new Set<string>();
+    let clockChanged = false;
+    let meterChanged = false;
+    let controlChanged = false;
     let arbitrationChanged = false;
 
     for (const runtime of this.runtimes.values()) {
@@ -340,17 +370,29 @@ export class PriorityAudioEngine {
       runtime.state.currentTime = runtime.element.currentTime;
       runtime.state.paused = runtime.element.paused;
 
+      const previousCurrentTime = this.snapshot.feeds[runtime.selection.feed.id]?.currentTime;
+      if (
+        previousCurrentTime !== undefined &&
+        runtime.state.currentTime !== undefined &&
+        Math.abs(runtime.state.currentTime - previousCurrentTime) >= CURRENT_TIME_SNAPSHOT_DELTA_S
+      ) {
+        changedFeedIds.add(runtime.selection.feed.id);
+        clockChanged = true;
+      }
+
       runtime.analyzerNode.getFloatTimeDomainData(runtime.analysisBuffer);
       const summary = summarizeFrame(runtime.analysisBuffer);
 
       if (Math.abs(runtime.state.level - summary.rms) > LEVEL_EPSILON) {
         runtime.state.level = summary.rms;
-        snapshotChanged = true;
+        changedFeedIds.add(runtime.selection.feed.id);
+        meterChanged = true;
       }
 
       if (Math.abs(runtime.state.peak - summary.peak) > LEVEL_EPSILON) {
         runtime.state.peak = summary.peak;
-        snapshotChanged = true;
+        changedFeedIds.add(runtime.selection.feed.id);
+        meterChanged = true;
       }
 
       const nextStatus = this.deriveStatus(runtime);
@@ -362,17 +404,24 @@ export class PriorityAudioEngine {
         if (nextStatus === 'buffering') {
           runtime.state.debug = 'stream buffering';
         }
-        snapshotChanged = true;
+        changedFeedIds.add(runtime.selection.feed.id);
+        controlChanged = true;
       }
 
-      const events = runtime.gateDetector.processFrame(runtime.selection.feed.id, runtime.analysisBuffer, performance.now());
+      const events = runtime.gateDetector.processFrame(
+        runtime.selection.feed.id,
+        runtime.analysisBuffer,
+        now,
+        elapsedMs
+      );
       for (const event of events) {
         if (event.type === 'gate-open' && !runtime.state.gateOpen) {
           runtime.state.gateOpen = true;
           runtime.state.debug = `gate open · rms ${event.rms?.toFixed(3) ?? '0.000'} · peak ${event.peak?.toFixed(3) ?? '0.000'}`;
           this.strategy.onFeedEvent(event);
           arbitrationChanged = true;
-          snapshotChanged = true;
+          changedFeedIds.add(runtime.selection.feed.id);
+          controlChanged = true;
         }
 
         if (event.type === 'gate-close' && runtime.state.gateOpen) {
@@ -380,18 +429,24 @@ export class PriorityAudioEngine {
           runtime.state.debug = `gate closed · rms ${event.rms?.toFixed(3) ?? '0.000'} · peak ${event.peak?.toFixed(3) ?? '0.000'}`;
           this.strategy.onFeedEvent(event);
           arbitrationChanged = true;
-          snapshotChanged = true;
+          changedFeedIds.add(runtime.selection.feed.id);
+          controlChanged = true;
         }
       }
     }
 
     if (arbitrationChanged) {
-      this.applyFloorState();
+      this.applyFloorState(now);
       return;
     }
 
-    if (snapshotChanged) {
-      this.emitSnapshot();
+    if (controlChanged) {
+      this.emitSnapshot(changedFeedIds, now);
+      return;
+    }
+
+    if ((meterChanged && now - this.lastSnapshotAt >= METER_SNAPSHOT_INTERVAL_MS) || clockChanged) {
+      this.emitSnapshot(changedFeedIds, now);
     }
   }
 
@@ -414,7 +469,7 @@ export class PriorityAudioEngine {
     return 'loading';
   }
 
-  private applyFloorState(): void {
+  private applyFloorState(now = performance.now()): void {
     this.floorFeedId = this.strategy.getFloorFeedId();
 
     for (const runtime of this.runtimes.values()) {
@@ -427,12 +482,12 @@ export class PriorityAudioEngine {
           ? `${baseDebug} · suppressed by priority`
           : baseDebug;
 
-      const now = this.context?.currentTime ?? 0;
-      runtime.gainNode.gain.cancelScheduledValues(now);
-      runtime.gainNode.gain.setValueAtTime(runtime.gainNode.gain.value, now);
-      runtime.gainNode.gain.linearRampToValueAtTime(isFloor ? 1 : 0, now + 0.02);
+      const audioNow = this.context?.currentTime ?? 0;
+      runtime.gainNode.gain.cancelScheduledValues(audioNow);
+      runtime.gainNode.gain.setValueAtTime(runtime.gainNode.gain.value, audioNow);
+      runtime.gainNode.gain.linearRampToValueAtTime(isFloor ? 1 : 0, audioNow + 0.02);
     }
 
-    this.emitSnapshot();
+    this.emitSnapshot(this.runtimes.keys(), now);
   }
 }

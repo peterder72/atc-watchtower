@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConsoleView } from './components/ConsoleView';
 import { LibraryView } from './components/LibraryView';
 import { AppHeader } from './components/AppHeader';
@@ -34,7 +34,6 @@ export default function App() {
   const [appState, setAppState] = useState(DEFAULT_APP_STATE);
   const [activeView, setActiveView] = useState<'library' | 'console'>('library');
   const [engineSnapshot, setEngineSnapshot] = useState<EngineSnapshot>(EMPTY_ENGINE_SNAPSHOT);
-  const [feedSquelchThresholdsDb, setFeedSquelchThresholdsDb] = useState<Record<string, number>>({});
   const [importNotices, setImportNotices] = useState<ImportNotice[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -78,20 +77,16 @@ export default function App() {
       return;
     }
 
-    void saveAppState(appState);
+    const timeoutId = window.setTimeout(() => {
+      void saveAppState(appState);
+    }, 150);
+
+    return () => clearTimeout(timeoutId);
   }, [appState, isHydrated]);
 
   const airports = useMemo(() => listAirportEntries(appState.packs), [appState.packs]);
   const feedPriorities = useMemo(() => createPriorityMapForPacks(appState.packs), [appState.packs]);
-  const activeFeedSquelchThresholdsDb = useMemo(() => {
-    const availableFeedIds = new Set(
-      appState.packs.flatMap((pack) => pack.airports.flatMap((airport) => airport.feeds.map((feed) => feed.id)))
-    );
-
-    return Object.fromEntries(
-      Object.entries(feedSquelchThresholdsDb).filter(([feedId]) => availableFeedIds.has(feedId))
-    );
-  }, [appState.packs, feedSquelchThresholdsDb]);
+  const activeFeedSquelchThresholdsDb = appState.feedSquelchThresholdsDb;
 
   useEffect(() => {
     engineRef.current?.setPriorities(feedPriorities);
@@ -184,30 +179,39 @@ export default function App() {
     );
   };
 
-  const handleFeedSquelchChange = (feedId: string, thresholdDb: number) => {
+  const handleFeedSquelchChange = useCallback((feedId: string, thresholdDb: number) => {
     const nextThresholdDb = clampSquelchThresholdDb(thresholdDb);
 
-    setFeedSquelchThresholdsDb((previous) => {
+    setAppState((previous) => {
+      const previousThresholdDb = previous.feedSquelchThresholdsDb[feedId];
+
       if (nextThresholdDb === DEFAULT_SQUELCH_THRESHOLD_DB) {
-        if (previous[feedId] === undefined) {
+        if (previousThresholdDb === undefined) {
           return previous;
         }
 
-        const nextThresholds = { ...previous };
+        const nextThresholds = { ...previous.feedSquelchThresholdsDb };
         delete nextThresholds[feedId];
-        return nextThresholds;
+
+        return {
+          ...previous,
+          feedSquelchThresholdsDb: nextThresholds
+        };
       }
 
-      if (previous[feedId] === nextThresholdDb) {
+      if (previousThresholdDb === nextThresholdDb) {
         return previous;
       }
 
       return {
         ...previous,
-        [feedId]: nextThresholdDb
+        feedSquelchThresholdsDb: {
+          ...previous.feedSquelchThresholdsDb,
+          [feedId]: nextThresholdDb
+        }
       };
     });
-  };
+  }, []);
 
   const handleStartListening = async () => {
     if (!engineRef.current || selectedFeeds.length === 0) {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import {
   DEFAULT_SQUELCH_THRESHOLD_DB,
   MAX_SQUELCH_THRESHOLD_DB,
@@ -25,7 +26,7 @@ function formatDb(value: number): string {
   return `${value} dB`;
 }
 
-export function FeedRuntimeCard({
+export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   feed,
   priority,
   runtime,
@@ -81,7 +82,7 @@ export function FeedRuntimeCard({
         </div>
         <div className="h-3 overflow-hidden rounded-full bg-white/8">
           <span
-            className="block h-full rounded-full bg-gradient-to-r from-teal to-accent transition-[width] duration-150"
+            className="block h-full rounded-full bg-gradient-to-r from-teal to-accent transition-[width] duration-75"
             style={{ width: `${level}%` }}
           />
         </div>
@@ -105,4 +106,4 @@ export function FeedRuntimeCard({
       {runtime?.error ? <p className="text-sm text-rose-200">{runtime.error}</p> : null}
     </article>
   );
-}
+});

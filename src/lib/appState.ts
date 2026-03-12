@@ -1,4 +1,9 @@
-import { type AppState, createAirportKey } from '../domain/models';
+import {
+  clampSquelchThresholdDb,
+  DEFAULT_SQUELCH_THRESHOLD_DB,
+  type AppState,
+  createAirportKey
+} from '../domain/models';
 import { consolidateStoredPacks, listAirportEntries } from './feedPacks';
 
 function remapAirportKey(airportKey: string | null, packIdMap: Record<string, string>): string | null {
@@ -39,11 +44,25 @@ export function normalizeAppState(
     airports[0]?.key ??
     null;
 
+  const feedSquelchThresholdsDb = Object.fromEntries(
+    Object.entries(previous.feedSquelchThresholdsDb).flatMap(([feedId, thresholdDb]) => {
+      const nextFeedId = consolidation.feedIdMap[feedId] ?? feedId;
+      const nextThresholdDb = clampSquelchThresholdDb(thresholdDb);
+
+      if (!availableFeedIds.has(nextFeedId) || nextThresholdDb === DEFAULT_SQUELCH_THRESHOLD_DB) {
+        return [];
+      }
+
+      return [[nextFeedId, nextThresholdDb] as const];
+    })
+  );
+
   return {
     packs: consolidation.packs,
     selectedFeedIds: previous.selectedFeedIds
       .map((feedId) => consolidation.feedIdMap[feedId] ?? feedId)
       .filter((feedId, index, collection) => availableFeedIds.has(feedId) && collection.indexOf(feedId) === index),
-    selectedAirportKey
+    selectedAirportKey,
+    feedSquelchThresholdsDb
   };
 }
