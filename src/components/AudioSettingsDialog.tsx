@@ -143,7 +143,7 @@ export function AudioSettingsDialog({ isOpen, settings, onChange, onClose, onRes
 
         <div className="grid gap-4 md:grid-cols-2">
           <SliderControl
-            description="How long a signal must stay hot before the gate opens."
+            description="How long a signal must stay hot before the gate opens. Watchtower adds matching monitor delay so the start of each call is preserved, and higher values increase latency."
             formatValue={formatMilliseconds}
             label="Transmission start delay"
             max={MAX_ATTACK_MS}

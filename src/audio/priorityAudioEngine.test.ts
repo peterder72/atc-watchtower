@@ -21,6 +21,22 @@ interface MockMediaElement {
   paused: boolean;
 }
 
+interface TestRuntime {
+  selection: FeedSelection;
+  state: EngineFeedState;
+  element: HTMLAudioElement;
+  sourceNode: MediaElementAudioSourceNode;
+  delayNode: DelayNode;
+  gainNode: GainNode;
+  analyzerNode: AnalyserNode;
+  analysisBuffer: Float32Array;
+  gateDetector: GateDetector;
+  filterHigh: BiquadFilterNode;
+  filterLow: BiquadFilterNode;
+  playbackDelayMs: number;
+  audibleGateOpen: boolean;
+}
+
 function createSelection(feedId: string, priority: number, order: number): FeedSelection {
   return {
     feed: {
@@ -34,19 +50,39 @@ function createSelection(feedId: string, priority: number, order: number): FeedS
   };
 }
 
-function createGainNode(): GainNode {
-  const gain = {
-    value: 0,
+function getPlaybackDelayMs(settings: AudioProcessingSettings): number {
+  return Math.max(200, settings.attackMs + 100);
+}
+
+function createAudioParam(initialValue = 0): AudioParam {
+  const param = {
+    value: initialValue,
     cancelScheduledValues: vi.fn(),
     setValueAtTime: vi.fn((value: number) => {
-      gain.value = value;
+      param.value = value;
+      return param;
     }),
     linearRampToValueAtTime: vi.fn((value: number) => {
-      gain.value = value;
+      param.value = value;
+      return param;
     })
   };
 
-  return { gain } as unknown as GainNode;
+  return param as unknown as AudioParam;
+}
+
+function createGainNode(): GainNode {
+  return {
+    gain: createAudioParam(0),
+    disconnect: vi.fn()
+  } as unknown as GainNode;
+}
+
+function createDelayNode(initialValue = 0): DelayNode {
+  return {
+    delayTime: createAudioParam(initialValue),
+    disconnect: vi.fn()
+  } as unknown as DelayNode;
 }
 
 function createRuntime(
@@ -58,6 +94,7 @@ function createRuntime(
   const audioProcessingSettings =
     (engine as unknown as { audioProcessingSettings: AudioProcessingSettings }).audioProcessingSettings ??
     DEFAULT_AUDIO_PROCESSING_SETTINGS;
+  const playbackDelayMs = getPlaybackDelayMs(audioProcessingSettings);
   const element: MockMediaElement = {
     readyState: HTMLMediaElement.HAVE_NOTHING,
     networkState: HTMLMediaElement.NETWORK_EMPTY,
@@ -81,32 +118,42 @@ function createRuntime(
     captureTrackCount: 0,
     debug: 'media element graph active'
   };
-  const runtime = {
+  const runtime: TestRuntime = {
     selection,
     state: runtimeState,
     element: element as HTMLAudioElement,
-    sourceNode: {} as MediaElementAudioSourceNode,
+    sourceNode: {
+      disconnect: vi.fn()
+    } as unknown as MediaElementAudioSourceNode,
+    delayNode: createDelayNode(playbackDelayMs / 1000),
     gainNode: createGainNode(),
     analyzerNode: {
+      disconnect: vi.fn(),
       getFloatTimeDomainData(buffer: Float32Array) {
         buffer.fill(amplitudeRef.value);
       }
-    } as AnalyserNode,
+    } as unknown as AnalyserNode,
     analysisBuffer: new Float32Array(128),
     gateDetector: new GateDetector({
       frameDurationMs: ANALYSIS_INTERVAL_MS,
       configuredFloorDb,
       ...audioProcessingSettings
     }),
-    filterHigh: {} as BiquadFilterNode,
-    filterLow: {} as BiquadFilterNode
+    filterHigh: {
+      disconnect: vi.fn()
+    } as unknown as BiquadFilterNode,
+    filterLow: {
+      disconnect: vi.fn()
+    } as unknown as BiquadFilterNode,
+    playbackDelayMs,
+    audibleGateOpen: false
   };
 
   (engine as unknown as { context: AudioContext | null }).context = { currentTime: 0 } as AudioContext;
   (engine as unknown as { running: boolean }).running = true;
   (
     engine as unknown as {
-      runtimes: Map<string, typeof runtime>;
+      runtimes: Map<string, TestRuntime>;
       strategy: { registerFeed: (feedId: string, priority: number, order: number) => void };
     }
   ).runtimes.set(selection.feed.id, runtime);
@@ -127,7 +174,7 @@ function runAnalysis(engine: PriorityAudioEngine, now: number) {
 }
 
 describe('PriorityAudioEngine', () => {
-  it('opens and closes gates using elapsed analysis time', () => {
+  it('delays floor ownership until the delayed audio becomes audible', () => {
     const engine = new PriorityAudioEngine();
     const amplitudeRef = { value: 0.2 };
     const { runtime } = createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef);
@@ -135,13 +182,24 @@ describe('PriorityAudioEngine', () => {
     runAnalysis(engine, 20);
     runAnalysis(engine, 40);
     expect(runtime.state.gateOpen).toBe(false);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
 
     runAnalysis(engine, 60);
     expect(runtime.state.gateOpen).toBe(true);
-    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
 
     amplitudeRef.value = 0.0001;
-    for (let now = 80; now < 460; now += ANALYSIS_INTERVAL_MS) {
+    for (let now = 80; now < 200; now += ANALYSIS_INTERVAL_MS) {
+      runAnalysis(engine, now);
+    }
+
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    runAnalysis(engine, 200);
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+    expect(runtime.state.isFloor).toBe(true);
+
+    for (let now = 220; now < 460; now += ANALYSIS_INTERVAL_MS) {
       runAnalysis(engine, now);
     }
 
@@ -149,6 +207,7 @@ describe('PriorityAudioEngine', () => {
 
     runAnalysis(engine, 460);
     expect(runtime.state.gateOpen).toBe(false);
+    expect(runtime.state.isFloor).toBe(false);
     expect(engine.getSnapshot().floorFeedId).toBeNull();
   });
 
@@ -229,62 +288,122 @@ describe('PriorityAudioEngine', () => {
     expect(snapshots[2].feeds.tower.currentTime).toBe(0.3);
   });
 
-  it('emits immediate floor-owner updates even while meter snapshots are throttled', () => {
+  it('delays higher-priority preemption until the delayed audio reaches the speakers', () => {
     const engine = new PriorityAudioEngine();
-    const snapshots: EngineSnapshot[] = [];
-
-    engine.subscribe((snapshot) => {
-      snapshots.push(snapshot);
-    });
-    createRuntime(engine, createSelection('tower', 2, 0), { value: 0.2 });
-    createRuntime(engine, createSelection('approach', 1, 1), { value: 0.2 });
+    const towerAmplitude = { value: 0.2 };
+    const approachAmplitude = { value: 0 };
+    const { runtime: towerRuntime } = createRuntime(engine, createSelection('tower', 2, 0), towerAmplitude);
+    const { runtime: approachRuntime } = createRuntime(engine, createSelection('approach', 1, 1), approachAmplitude);
 
     runAnalysis(engine, 20);
     runAnalysis(engine, 40);
-    expect(snapshots).toHaveLength(1);
-
     runAnalysis(engine, 60);
 
-    expect(snapshots).toHaveLength(2);
-    expect(snapshots[1].floorFeedId).toBe('approach');
-    expect(snapshots[1].feeds.approach.isFloor).toBe(true);
-    expect(snapshots[1].feeds.tower.isFloor).toBe(false);
+    expect(towerRuntime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    runAnalysis(engine, 80);
+    approachAmplitude.value = 0.2;
+    runAnalysis(engine, 100);
+    runAnalysis(engine, 120);
+    runAnalysis(engine, 140);
+
+    expect(approachRuntime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    runAnalysis(engine, 160);
+    runAnalysis(engine, 180);
+    runAnalysis(engine, 200);
+
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+    expect(towerRuntime.state.isFloor).toBe(true);
+    expect(approachRuntime.state.isFloor).toBe(false);
+
+    runAnalysis(engine, 220);
+    runAnalysis(engine, 240);
+    runAnalysis(engine, 260);
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+
+    runAnalysis(engine, 280);
+
+    expect(engine.getSnapshot().floorFeedId).toBe('approach');
+    expect(towerRuntime.state.isFloor).toBe(false);
+    expect(approachRuntime.state.isFloor).toBe(true);
   });
 
-  it('applies updated audio settings live to active runtimes', () => {
+  it('reschedules delayed openings when audio settings change live', () => {
     const engine = new PriorityAudioEngine();
     const amplitudeRef = { value: 0.2 };
     const { runtime } = createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef);
 
     runAnalysis(engine, 20);
-    expect(runtime.state.gateOpen).toBe(false);
+    runAnalysis(engine, 40);
+    runAnalysis(engine, 60);
+
+    expect(runtime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+    expect(runtime.playbackDelayMs).toBe(200);
+    expect(runtime.delayNode.delayTime.value).toBeCloseTo(0.2);
 
     engine.setAudioProcessingSettings({
       ...DEFAULT_AUDIO_PROCESSING_SETTINGS,
-      attackMs: 40,
-      hangMs: 200
+      attackMs: 140,
+      hangMs: 400
     });
 
-    runAnalysis(engine, 40);
-    expect(runtime.state.gateOpen).toBe(true);
+    expect(runtime.playbackDelayMs).toBe(240);
+    expect(runtime.delayNode.delayTime.value).toBeCloseTo(0.24);
 
-    amplitudeRef.value = 0.0001;
-    for (let now = 60; now < 240; now += ANALYSIS_INTERVAL_MS) {
+    for (let now = 80; now < 240; now += ANALYSIS_INTERVAL_MS) {
       runAnalysis(engine, now);
     }
 
-    expect(runtime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
 
     runAnalysis(engine, 240);
-    expect(runtime.state.gateOpen).toBe(false);
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+    expect(runtime.state.isFloor).toBe(true);
   });
 
-  it('uses the current audio settings for new runtimes', () => {
+  it('keeps delayed audio tails audible when hang time is shorter than playback delay', () => {
     const engine = new PriorityAudioEngine();
 
     engine.setAudioProcessingSettings({
       ...DEFAULT_AUDIO_PROCESSING_SETTINGS,
-      attackMs: 100,
+      attackMs: 20,
+      hangMs: 100
+    });
+
+    const amplitudeRef = { value: 0.2 };
+    const { runtime } = createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef);
+
+    runAnalysis(engine, 20);
+    expect(runtime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    amplitudeRef.value = 0.0001;
+    for (let now = 40; now <= 120; now += ANALYSIS_INTERVAL_MS) {
+      runAnalysis(engine, now);
+    }
+
+    expect(runtime.state.gateOpen).toBe(false);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    runAnalysis(engine, 200);
+    expect(runtime.state.isFloor).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+
+    runAnalysis(engine, 220);
+    expect(runtime.state.isFloor).toBe(false);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+  });
+
+  it('uses the current audio settings and playback delay for new runtimes', () => {
+    const engine = new PriorityAudioEngine();
+
+    engine.setAudioProcessingSettings({
+      ...DEFAULT_AUDIO_PROCESSING_SETTINGS,
+      attackMs: 140,
       hangMs: 200,
       openDeltaDb: 11,
       closeGapDb: 6
@@ -293,13 +412,16 @@ describe('PriorityAudioEngine', () => {
     const amplitudeRef = { value: 0.2 };
     const { runtime } = createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef);
 
-    for (let now = ANALYSIS_INTERVAL_MS; now < 100; now += ANALYSIS_INTERVAL_MS) {
+    expect(runtime.playbackDelayMs).toBe(240);
+    expect(runtime.delayNode.delayTime.value).toBeCloseTo(0.24);
+
+    for (let now = ANALYSIS_INTERVAL_MS; now < 140; now += ANALYSIS_INTERVAL_MS) {
       runAnalysis(engine, now);
     }
 
     expect(runtime.state.gateOpen).toBe(false);
 
-    runAnalysis(engine, 100);
+    runAnalysis(engine, 140);
     expect(runtime.state.gateOpen).toBe(true);
   });
 });

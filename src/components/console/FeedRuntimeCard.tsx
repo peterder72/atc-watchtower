@@ -94,21 +94,6 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
         </div>
       </div>
 
-      <dl className="grid gap-2 sm:grid-cols-3">
-        <div className={insetBlockClass}>
-          <dt className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Gate</dt>
-          <dd className="mt-1 text-sm text-stone-100">{runtime?.gateOpen ? 'open' : 'closed'}</dd>
-        </div>
-        <div className={insetBlockClass}>
-          <dt className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Priority</dt>
-          <dd className="mt-1 text-sm text-stone-100">{priority}</dd>
-        </div>
-        <div className={insetBlockClass}>
-          <dt className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Floor owner</dt>
-          <dd className="mt-1 text-sm text-stone-100">{runtime?.isFloor ? 'current' : 'no'}</dd>
-        </div>
-      </dl>
-
       {runtime?.error ? <p className="text-sm text-rose-200">{runtime.error}</p> : null}
     </article>
   );

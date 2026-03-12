@@ -1,8 +1,10 @@
 import {
   DEFAULT_AUDIO_PROCESSING_SETTINGS,
+  MAX_ATTACK_MS,
   DEFAULT_SQUELCH_THRESHOLD_DB,
   normalizeAudioProcessingSettings,
   type AudioProcessingSettings,
+  type FeedActivityEvent,
   type EngineFeedState,
   type EngineSnapshot,
   type FeedSelection
@@ -15,12 +17,24 @@ interface FeedRuntime {
   state: EngineFeedState;
   element: HTMLAudioElement;
   sourceNode: MediaElementAudioSourceNode;
+  delayNode: DelayNode;
   gainNode: GainNode;
   analyzerNode: AnalyserNode;
   analysisBuffer: Float32Array<ArrayBuffer>;
   gateDetector: GateDetector;
   filterHigh: BiquadFilterNode;
   filterLow: BiquadFilterNode;
+  playbackDelayMs: number;
+  audibleGateOpen: boolean;
+}
+
+interface PendingStrategyEvent {
+  feedId: string;
+  type: Extract<FeedActivityEvent['type'], 'gate-open' | 'gate-close'>;
+  detectedAt: number;
+  referenceAt: number;
+  at: number;
+  sequence: number;
 }
 
 type SnapshotListener = (snapshot: EngineSnapshot) => void;
@@ -29,6 +43,10 @@ export const ANALYSIS_INTERVAL_MS = 20;
 export const METER_SNAPSHOT_INTERVAL_MS = 50;
 const CURRENT_TIME_SNAPSHOT_DELTA_S = 0.25;
 const LEVEL_EPSILON = 0.002;
+const MIN_PLAYBACK_DELAY_MS = 200;
+const PLAYBACK_DELAY_PADDING_MS = 100;
+const GAIN_RAMP_DURATION_S = 0.02;
+const MAX_PLAYBACK_DELAY_S = (Math.max(MIN_PLAYBACK_DELAY_MS, MAX_ATTACK_MS + PLAYBACK_DELAY_PADDING_MS) + 100) / 1000;
 const EMPTY_ENGINE_SNAPSHOT: EngineSnapshot = {
   running: false,
   floorFeedId: null,
@@ -89,6 +107,10 @@ export class PriorityAudioEngine {
 
   private lastSnapshotAt = 0;
 
+  private pendingStrategyEvents: PendingStrategyEvent[] = [];
+
+  private nextPendingStrategySequence = 0;
+
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener);
     listener(this.snapshot);
@@ -119,6 +141,8 @@ export class PriorityAudioEngine {
     this.floorFeedId = null;
     this.lastAnalysisAt = null;
     this.lastSnapshotAt = 0;
+    this.pendingStrategyEvents = [];
+    this.nextPendingStrategySequence = 0;
     this.strategy.reset();
 
     selections.forEach((selection) => this.attachFeed(selection));
@@ -134,6 +158,9 @@ export class PriorityAudioEngine {
       this.analysisTimerId = null;
     }
 
+    this.pendingStrategyEvents = [];
+    this.nextPendingStrategySequence = 0;
+
     for (const runtime of this.runtimes.values()) {
       runtime.element.pause();
       runtime.element.src = '';
@@ -141,6 +168,7 @@ export class PriorityAudioEngine {
       runtime.filterLow.disconnect();
       runtime.filterHigh.disconnect();
       runtime.analyzerNode.disconnect();
+      runtime.delayNode.disconnect();
       runtime.gainNode.disconnect();
       runtime.sourceNode.disconnect();
     }
@@ -191,9 +219,24 @@ export class PriorityAudioEngine {
   setAudioProcessingSettings(settings: AudioProcessingSettings): void {
     const nextSettings = normalizeAudioProcessingSettings(settings);
     this.audioProcessingSettings = { ...nextSettings };
+    const nextPlaybackDelayMs = this.getPlaybackDelayMs(nextSettings);
+    const audioNow = this.context?.currentTime ?? 0;
 
     for (const runtime of this.runtimes.values()) {
       runtime.gateDetector.updateConfig(nextSettings);
+      if (nextPlaybackDelayMs !== runtime.playbackDelayMs) {
+        runtime.playbackDelayMs = nextPlaybackDelayMs;
+        this.updateDelayNode(runtime, audioNow);
+      }
+    }
+
+    this.reschedulePendingStrategyEvents();
+
+    if (this.running) {
+      const now = this.lastAnalysisAt ?? performance.now();
+      if (this.processPendingStrategyEvents(now)) {
+        this.applyFloorState(now);
+      }
     }
   }
 
@@ -240,6 +283,106 @@ export class PriorityAudioEngine {
     return new GateDetector(this.buildGateDetectorConfig(feedId));
   }
 
+  private getPlaybackDelayMs(settings = this.audioProcessingSettings): number {
+    return Math.max(MIN_PLAYBACK_DELAY_MS, settings.attackMs + PLAYBACK_DELAY_PADDING_MS);
+  }
+
+  private updateDelayNode(runtime: FeedRuntime, audioNow = this.context?.currentTime ?? 0): void {
+    const nextDelaySeconds = runtime.playbackDelayMs / 1000;
+    runtime.delayNode.delayTime.cancelScheduledValues(audioNow);
+    runtime.delayNode.delayTime.setValueAtTime(runtime.delayNode.delayTime.value, audioNow);
+    runtime.delayNode.delayTime.linearRampToValueAtTime(nextDelaySeconds, audioNow + GAIN_RAMP_DURATION_S);
+  }
+
+  private queueStrategyEvent(
+    feedId: string,
+    type: PendingStrategyEvent['type'],
+    at: number,
+    playbackDelayMs: number
+  ): void {
+    const detectorDelayMs = type === 'gate-open' ? this.audioProcessingSettings.attackMs : this.audioProcessingSettings.hangMs;
+    const referenceAt = at - detectorDelayMs;
+    this.pendingStrategyEvents.push({
+      feedId,
+      type,
+      detectedAt: at,
+      referenceAt,
+      at: Math.max(at, referenceAt + playbackDelayMs),
+      sequence: this.nextPendingStrategySequence++
+    });
+  }
+
+  private reschedulePendingStrategyEvents(): void {
+    this.pendingStrategyEvents = this.pendingStrategyEvents.map((event) => {
+      const runtime = this.runtimes.get(event.feedId);
+      if (!runtime) {
+        return event;
+      }
+
+      return {
+        ...event,
+        at: Math.max(event.detectedAt, event.referenceAt + runtime.playbackDelayMs)
+      };
+    });
+  }
+
+  private processPendingStrategyEvents(now: number): boolean {
+    if (this.pendingStrategyEvents.length === 0) {
+      return false;
+    }
+
+    const dueEvents: PendingStrategyEvent[] = [];
+    const nextPendingEvents: PendingStrategyEvent[] = [];
+
+    for (const event of this.pendingStrategyEvents) {
+      if (event.at <= now) {
+        dueEvents.push(event);
+        continue;
+      }
+
+      nextPendingEvents.push(event);
+    }
+
+    if (dueEvents.length === 0) {
+      return false;
+    }
+
+    dueEvents.sort((left, right) => left.at - right.at || left.sequence - right.sequence);
+    this.pendingStrategyEvents = nextPendingEvents;
+
+    let changed = false;
+    for (const event of dueEvents) {
+      changed = this.dispatchStrategyEvent(event) || changed;
+    }
+
+    return changed;
+  }
+
+  private dispatchStrategyEvent(event: PendingStrategyEvent): boolean {
+    const runtime = this.runtimes.get(event.feedId);
+    if (!runtime) {
+      return false;
+    }
+
+    if (event.type === 'gate-open') {
+      if (runtime.audibleGateOpen) {
+        return false;
+      }
+
+      runtime.audibleGateOpen = true;
+      this.strategy.onFeedEvent(event);
+      return true;
+    }
+
+    if (!runtime.audibleGateOpen) {
+      return false;
+    }
+
+    runtime.audibleGateOpen = false;
+    this.strategy.onFeedEvent(event);
+    return true;
+  }
+
   private attachFeed(selection: FeedSelection): void {
     if (!this.context || !this.masterGain || !this.analysisSink) {
       throw new Error('Audio engine is not initialized.');
@@ -252,9 +395,11 @@ export class PriorityAudioEngine {
     element.setAttribute('playsinline', 'true');
 
     const sourceNode = this.context.createMediaElementSource(element);
+    const delayNode = this.context.createDelay(MAX_PLAYBACK_DELAY_S);
     const gainNode = this.context.createGain();
     gainNode.gain.value = 0;
-    sourceNode.connect(gainNode);
+    sourceNode.connect(delayNode);
+    delayNode.connect(gainNode);
     gainNode.connect(this.masterGain);
 
     const filterHigh = this.context.createBiquadFilter();
@@ -299,6 +444,7 @@ export class PriorityAudioEngine {
       state: runtimeState,
       element,
       sourceNode,
+      delayNode,
       gainNode,
       analyzerNode,
       analysisBuffer: new Float32Array(
@@ -306,9 +452,12 @@ export class PriorityAudioEngine {
       ),
       gateDetector: this.createGateDetector(selection.feed.id),
       filterHigh,
-      filterLow
+      filterLow,
+      playbackDelayMs: this.getPlaybackDelayMs(),
+      audibleGateOpen: false
     };
 
+    this.updateDelayNode(runtime);
     this.runtimes.set(selection.feed.id, runtime);
     this.strategy.registerFeed(selection.feed.id, selection.priority, selection.order);
 
@@ -383,7 +532,7 @@ export class PriorityAudioEngine {
     let clockChanged = false;
     let meterChanged = false;
     let controlChanged = false;
-    let arbitrationChanged = false;
+    let arbitrationChanged = this.processPendingStrategyEvents(now);
 
     for (const runtime of this.runtimes.values()) {
       runtime.state.readyState = runtime.element.readyState;
@@ -439,8 +588,7 @@ export class PriorityAudioEngine {
         if (event.type === 'gate-open' && !runtime.state.gateOpen) {
           runtime.state.gateOpen = true;
           runtime.state.debug = `gate open · rms ${event.rms?.toFixed(3) ?? '0.000'} · peak ${event.peak?.toFixed(3) ?? '0.000'}`;
-          this.strategy.onFeedEvent(event);
-          arbitrationChanged = true;
+          this.queueStrategyEvent(event.feedId, 'gate-open', event.at, runtime.playbackDelayMs);
           changedFeedIds.add(runtime.selection.feed.id);
           controlChanged = true;
         }
@@ -448,13 +596,14 @@ export class PriorityAudioEngine {
         if (event.type === 'gate-close' && runtime.state.gateOpen) {
           runtime.state.gateOpen = false;
           runtime.state.debug = `gate closed · rms ${event.rms?.toFixed(3) ?? '0.000'} · peak ${event.peak?.toFixed(3) ?? '0.000'}`;
-          this.strategy.onFeedEvent(event);
-          arbitrationChanged = true;
+          this.queueStrategyEvent(event.feedId, 'gate-close', event.at, runtime.playbackDelayMs);
           changedFeedIds.add(runtime.selection.feed.id);
           controlChanged = true;
         }
       }
     }
+
+    arbitrationChanged = this.processPendingStrategyEvents(now) || arbitrationChanged;
 
     if (arbitrationChanged) {
       this.applyFloorState(now);
@@ -494,19 +643,19 @@ export class PriorityAudioEngine {
     this.floorFeedId = this.strategy.getFloorFeedId();
 
     for (const runtime of this.runtimes.values()) {
-      const isFloor = runtime.selection.feed.id === this.floorFeedId && runtime.state.gateOpen;
+      const isFloor = runtime.selection.feed.id === this.floorFeedId;
       runtime.state.isFloor = isFloor;
       const baseDebug = stripPrioritySuffix(runtime.state.debug);
       runtime.state.debug = isFloor
         ? `${baseDebug} · floor owner`
-        : runtime.state.gateOpen
+        : runtime.audibleGateOpen
           ? `${baseDebug} · suppressed by priority`
           : baseDebug;
 
       const audioNow = this.context?.currentTime ?? 0;
       runtime.gainNode.gain.cancelScheduledValues(audioNow);
       runtime.gainNode.gain.setValueAtTime(runtime.gainNode.gain.value, audioNow);
-      runtime.gainNode.gain.linearRampToValueAtTime(isFloor ? 1 : 0, audioNow + 0.02);
+      runtime.gainNode.gain.linearRampToValueAtTime(isFloor ? 1 : 0, audioNow + GAIN_RAMP_DURATION_S);
     }
 
     this.emitSnapshot(this.runtimes.keys(), now);

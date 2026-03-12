@@ -59,5 +59,8 @@ describe('FeedRuntimeCard', () => {
     expect(card?.className).not.toContain('border-success/45');
     expect(card?.className).not.toContain('shadow-floor');
     expect(card?.className).toContain('shadow-panel');
+    expect(screen.queryByText('Gate')).toBeNull();
+    expect(screen.queryByText('Priority')).toBeNull();
+    expect(screen.queryByText('Floor owner')).toBeNull();
   });
 });
