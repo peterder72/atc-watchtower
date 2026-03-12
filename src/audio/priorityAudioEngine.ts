@@ -60,7 +60,8 @@ function stripPrioritySuffix(debug: string | undefined): string {
 
   return debug
     .replace(/ · floor owner$/, '')
-    .replace(/ · suppressed by priority$/, '');
+    .replace(/ · suppressed by priority$/, '')
+    .replace(/ · muted$/, '');
 }
 
 function describeMediaError(error: MediaError | null): string {
@@ -240,6 +241,84 @@ export class PriorityAudioEngine {
     }
   }
 
+  setFeedPowered(feedId: string, powered: boolean): void {
+    const runtime = this.runtimes.get(feedId);
+    if (!runtime || runtime.state.powered === powered) {
+      return;
+    }
+
+    const now = performance.now();
+    let arbitrationChanged = false;
+
+    this.clearPendingStrategyEvents(feedId);
+
+    if (!powered) {
+      arbitrationChanged = this.updateRuntimeParticipation(runtime, false, now) || arbitrationChanged;
+      runtime.state.powered = false;
+      runtime.state.isFloor = false;
+      runtime.state.gateOpen = false;
+      runtime.state.level = 0;
+      runtime.state.peak = 0;
+      runtime.state.status = 'idle';
+      runtime.state.error = undefined;
+      runtime.state.debug = 'feed powered off';
+      runtime.gateDetector = this.createGateDetector(feedId);
+      this.stopRuntimePlayback(runtime);
+    } else {
+      runtime.state.powered = true;
+      runtime.state.isFloor = false;
+      runtime.state.gateOpen = false;
+      runtime.state.level = 0;
+      runtime.state.peak = 0;
+      runtime.state.status = 'loading';
+      runtime.state.error = undefined;
+      runtime.state.debug = runtime.state.muted ? 'feed muted · awaiting stream data' : 'awaiting first decoded audio frame';
+      runtime.gateDetector = this.createGateDetector(feedId);
+      runtime.audibleGateOpen = false;
+      this.startRuntimePlayback(runtime);
+    }
+
+    if (arbitrationChanged) {
+      this.applyFloorState(now);
+      return;
+    }
+
+    this.emitSnapshot([feedId], now);
+  }
+
+  setFeedMuted(feedId: string, muted: boolean): void {
+    const runtime = this.runtimes.get(feedId);
+    if (!runtime || runtime.state.muted === muted) {
+      return;
+    }
+
+    const now = performance.now();
+    runtime.state.muted = muted;
+    this.clearPendingStrategyEvents(feedId);
+
+    let arbitrationChanged = false;
+    if (muted) {
+      arbitrationChanged = this.updateRuntimeParticipation(runtime, false, now);
+      const baseDebug = stripPrioritySuffix(runtime.state.debug);
+      runtime.state.debug = runtime.state.powered ? `${baseDebug} · muted` : baseDebug;
+    } else {
+      runtime.state.debug = stripPrioritySuffix(runtime.state.debug);
+
+      if (runtime.state.powered && runtime.state.gateOpen && !runtime.audibleGateOpen) {
+        runtime.audibleGateOpen = true;
+        this.strategy.onFeedEvent(this.createStrategyEvent(feedId, 'gate-open', now));
+        arbitrationChanged = true;
+      }
+    }
+
+    if (arbitrationChanged) {
+      this.applyFloorState(now);
+      return;
+    }
+
+    this.emitSnapshot([feedId], now);
+  }
+
   private buildSnapshot(changedFeedIds?: Iterable<string>): EngineSnapshot {
     const changedFeedIdSet = changedFeedIds ? new Set(changedFeedIds) : null;
     const feeds = Object.fromEntries(
@@ -265,6 +344,70 @@ export class PriorityAudioEngine {
     for (const listener of this.listeners) {
       listener(snapshot);
     }
+  }
+
+  private createStrategyEvent(
+    feedId: string,
+    type: Extract<FeedActivityEvent['type'], 'gate-open' | 'gate-close'>,
+    at: number
+  ): FeedActivityEvent {
+    return { feedId, type, at };
+  }
+
+  private clearPendingStrategyEvents(feedId: string): void {
+    this.pendingStrategyEvents = this.pendingStrategyEvents.filter((event) => event.feedId !== feedId);
+  }
+
+  private updateRuntimeElementState(runtime: FeedRuntime): void {
+    runtime.state.readyState = runtime.element.readyState;
+    runtime.state.networkState = runtime.element.networkState;
+    runtime.state.currentTime = runtime.element.currentTime;
+    runtime.state.paused = runtime.element.paused;
+  }
+
+  private updateRuntimeParticipation(runtime: FeedRuntime, shouldParticipate: boolean, at: number): boolean {
+    if (shouldParticipate) {
+      if (runtime.audibleGateOpen || !runtime.state.powered || runtime.state.muted || !runtime.state.gateOpen) {
+        return false;
+      }
+
+      runtime.audibleGateOpen = true;
+      this.strategy.onFeedEvent(this.createStrategyEvent(runtime.selection.feed.id, 'gate-open', at));
+      return true;
+    }
+
+    if (!runtime.audibleGateOpen) {
+      return false;
+    }
+
+    runtime.audibleGateOpen = false;
+    this.strategy.onFeedEvent(this.createStrategyEvent(runtime.selection.feed.id, 'gate-close', at));
+    return true;
+  }
+
+  private stopRuntimePlayback(runtime: FeedRuntime): void {
+    runtime.element.pause();
+    runtime.element.src = '';
+    runtime.element.load();
+    this.updateRuntimeElementState(runtime);
+  }
+
+  private startRuntimePlayback(runtime: FeedRuntime): void {
+    runtime.element.src = runtime.selection.feed.streamUrl;
+    runtime.element.load();
+    this.updateRuntimeElementState(runtime);
+
+    void runtime.element.play().catch((error) => {
+      if (!runtime.state.powered) {
+        return;
+      }
+
+      runtime.state.status = 'error';
+      runtime.state.error = error instanceof Error ? error.message : 'Playback start failed.';
+      this.updateRuntimeElementState(runtime);
+      runtime.state.debug = 'play() rejected';
+      this.emitSnapshot([runtime.selection.feed.id]);
+    });
   }
 
   private getFeedSquelchThresholdDb(feedId: string): number {
@@ -365,7 +508,7 @@ export class PriorityAudioEngine {
     }
 
     if (event.type === 'gate-open') {
-      if (runtime.audibleGateOpen) {
+      if (runtime.audibleGateOpen || !runtime.state.powered || runtime.state.muted) {
         return false;
       }
 
@@ -425,6 +568,8 @@ export class PriorityAudioEngine {
       feedId: selection.feed.id,
       label: selection.feed.label,
       priority: selection.priority,
+      powered: true,
+      muted: false,
       isFloor: false,
       gateOpen: false,
       level: 0,
@@ -462,66 +607,64 @@ export class PriorityAudioEngine {
     this.strategy.registerFeed(selection.feed.id, selection.priority, selection.order);
 
     element.addEventListener('playing', () => {
+      if (!runtime.state.powered) {
+        return;
+      }
+
       runtime.state.status = 'ready';
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
+      runtime.state.error = undefined;
+      this.updateRuntimeElementState(runtime);
       runtime.state.debug = 'receiving decoded audio';
       this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('canplay', () => {
+      if (!runtime.state.powered) {
+        return;
+      }
+
       runtime.state.status = 'ready';
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
+      runtime.state.error = undefined;
+      this.updateRuntimeElementState(runtime);
       runtime.state.debug = 'decoder ready';
       this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('waiting', () => {
+      if (!runtime.state.powered) {
+        return;
+      }
+
       runtime.state.status = 'buffering';
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
+      this.updateRuntimeElementState(runtime);
       runtime.state.debug = 'waiting for stream data';
       this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('stalled', () => {
+      if (!runtime.state.powered) {
+        return;
+      }
+
       runtime.state.status = 'buffering';
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
+      this.updateRuntimeElementState(runtime);
       runtime.state.debug = 'stream stalled';
       this.emitSnapshot([selection.feed.id]);
     });
 
     element.addEventListener('error', () => {
+      if (!runtime.state.powered) {
+        return;
+      }
+
       runtime.state.status = 'error';
       runtime.state.error = describeMediaError(runtime.element.error);
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
+      this.updateRuntimeElementState(runtime);
       runtime.state.debug = `media error code ${runtime.element.error?.code ?? 'unknown'}`;
       this.emitSnapshot([selection.feed.id]);
     });
 
-    void element.play().catch((error) => {
-      runtime.state.status = 'error';
-      runtime.state.error = error instanceof Error ? error.message : 'Playback start failed.';
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
-      runtime.state.debug = 'play() rejected';
-      this.emitSnapshot([selection.feed.id]);
-    });
+    this.startRuntimePlayback(runtime);
   }
 
   private sampleAnalysis(now = performance.now()): void {
@@ -535,10 +678,11 @@ export class PriorityAudioEngine {
     let arbitrationChanged = this.processPendingStrategyEvents(now);
 
     for (const runtime of this.runtimes.values()) {
-      runtime.state.readyState = runtime.element.readyState;
-      runtime.state.networkState = runtime.element.networkState;
-      runtime.state.currentTime = runtime.element.currentTime;
-      runtime.state.paused = runtime.element.paused;
+      this.updateRuntimeElementState(runtime);
+
+      if (!runtime.state.powered) {
+        continue;
+      }
 
       const previousCurrentTime = this.snapshot.feeds[runtime.selection.feed.id]?.currentTime;
       if (
@@ -588,7 +732,9 @@ export class PriorityAudioEngine {
         if (event.type === 'gate-open' && !runtime.state.gateOpen) {
           runtime.state.gateOpen = true;
           runtime.state.debug = `gate open · rms ${event.rms?.toFixed(3) ?? '0.000'} · peak ${event.peak?.toFixed(3) ?? '0.000'}`;
-          this.queueStrategyEvent(event.feedId, 'gate-open', event.at, runtime.playbackDelayMs);
+          if (!runtime.state.muted) {
+            this.queueStrategyEvent(event.feedId, 'gate-open', event.at, runtime.playbackDelayMs);
+          }
           changedFeedIds.add(runtime.selection.feed.id);
           controlChanged = true;
         }
@@ -596,7 +742,9 @@ export class PriorityAudioEngine {
         if (event.type === 'gate-close' && runtime.state.gateOpen) {
           runtime.state.gateOpen = false;
           runtime.state.debug = `gate closed · rms ${event.rms?.toFixed(3) ?? '0.000'} · peak ${event.peak?.toFixed(3) ?? '0.000'}`;
-          this.queueStrategyEvent(event.feedId, 'gate-close', event.at, runtime.playbackDelayMs);
+          if (!runtime.state.muted) {
+            this.queueStrategyEvent(event.feedId, 'gate-close', event.at, runtime.playbackDelayMs);
+          }
           changedFeedIds.add(runtime.selection.feed.id);
           controlChanged = true;
         }
@@ -621,6 +769,10 @@ export class PriorityAudioEngine {
   }
 
   private deriveStatus(runtime: FeedRuntime): EngineFeedState['status'] {
+    if (!runtime.state.powered) {
+      return 'idle';
+    }
+
     if (runtime.state.status === 'error') {
       return 'error';
     }
@@ -643,13 +795,14 @@ export class PriorityAudioEngine {
     this.floorFeedId = this.strategy.getFloorFeedId();
 
     for (const runtime of this.runtimes.values()) {
-      const isFloor = runtime.selection.feed.id === this.floorFeedId;
+      const isFloor =
+        runtime.state.powered && !runtime.state.muted && runtime.selection.feed.id === this.floorFeedId;
       runtime.state.isFloor = isFloor;
       const baseDebug = stripPrioritySuffix(runtime.state.debug);
       runtime.state.debug = isFloor
         ? `${baseDebug} · floor owner`
         : runtime.audibleGateOpen
-          ? `${baseDebug} · suppressed by priority`
+          ? `${baseDebug}${runtime.state.muted ? '' : ' · suppressed by priority'}`
           : baseDebug;
 
       const audioNow = this.context?.currentTime ?? 0;

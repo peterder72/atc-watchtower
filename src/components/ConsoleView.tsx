@@ -11,12 +11,16 @@ import { panelClass } from './ui/styles';
 interface ConsoleViewProps {
   airportName: string;
   feeds: FeedDef[];
+  feedControls: Record<string, { powered: boolean; muted: boolean }>;
   feedPriorities: Record<string, number>;
   feedSquelchThresholdsDb: Record<string, number>;
   engineSnapshot: EngineSnapshot;
   isDebugVisible: boolean;
+  isRunning: boolean;
   onStart: () => void;
   onStop: () => void;
+  onFeedMutedChange: (feedId: string, muted: boolean) => void;
+  onFeedPoweredChange: (feedId: string, powered: boolean) => void;
   onFeedSquelchChange: (feedId: string, thresholdDb: number) => void;
   onToggleDebug: () => void;
 }
@@ -24,16 +28,20 @@ interface ConsoleViewProps {
 export function ConsoleView({
   airportName,
   feeds,
+  feedControls,
   feedPriorities,
   feedSquelchThresholdsDb,
   engineSnapshot,
   isDebugVisible,
+  isRunning,
   onStart,
   onStop,
+  onFeedMutedChange,
+  onFeedPoweredChange,
   onFeedSquelchChange,
   onToggleDebug
 }: ConsoleViewProps) {
-  const canStart = feeds.length > 0 && !engineSnapshot.running;
+  const canStart = feeds.length > 0 && !isRunning;
   const activeSpeaker = engineSnapshot.floorFeedId
     ? feeds.find((feed) => feed.id === engineSnapshot.floorFeedId)?.label ?? engineSnapshot.floorFeedId
     : null;
@@ -45,7 +53,7 @@ export function ConsoleView({
         airportName={airportName}
         canStart={canStart}
         isDebugVisible={isDebugVisible}
-        isRunning={engineSnapshot.running}
+        isRunning={isRunning}
         onStart={onStart}
         onStop={onStop}
         onToggleDebug={onToggleDebug}
@@ -61,8 +69,12 @@ export function ConsoleView({
                 <FeedRuntimeCard
                   key={feed.id}
                   feed={feed}
+                  controls={feedControls[feed.id] ?? { powered: true, muted: false }}
+                  controlsDisabled={!isRunning}
                   priority={feedPriorities[feed.id] ?? feed.defaultPriority}
                   runtime={engineSnapshot.feeds[feed.id]}
+                  onFeedMutedChange={onFeedMutedChange}
+                  onFeedPoweredChange={onFeedPoweredChange}
                   squelchThresholdDb={feedSquelchThresholdsDb[feed.id] ?? DEFAULT_SQUELCH_THRESHOLD_DB}
                   onFeedSquelchChange={onFeedSquelchChange}
                 />

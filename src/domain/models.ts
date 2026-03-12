@@ -73,6 +73,8 @@ export interface EngineFeedState {
   feedId: string;
   label: string;
   priority: number;
+  powered: boolean;
+  muted: boolean;
   isFloor: boolean;
   gateOpen: boolean;
   level: number;

@@ -7,13 +7,20 @@ import {
   type FeedDef
 } from '../../domain/models';
 import { cn } from '../../lib/cn';
-import { StatusPill } from '../ui/common';
+import { Button, StatusPill } from '../ui/common';
 import { eyebrowClass, feedCardClass, insetBlockClass } from '../ui/styles';
 
 interface FeedRuntimeCardProps {
+  controls: {
+    powered: boolean;
+    muted: boolean;
+  };
+  controlsDisabled: boolean;
   feed: FeedDef;
   priority: number;
   runtime?: EngineFeedState;
+  onFeedMutedChange: (feedId: string, muted: boolean) => void;
+  onFeedPoweredChange: (feedId: string, powered: boolean) => void;
   squelchThresholdDb?: number;
   onFeedSquelchChange: (feedId: string, thresholdDb: number) => void;
 }
@@ -27,12 +34,18 @@ function formatDb(value: number): string {
 }
 
 export const FeedRuntimeCard = memo(function FeedRuntimeCard({
+  controls,
+  controlsDisabled,
   feed,
   priority,
   runtime,
+  onFeedMutedChange,
+  onFeedPoweredChange,
   squelchThresholdDb = DEFAULT_SQUELCH_THRESHOLD_DB,
   onFeedSquelchChange
 }: FeedRuntimeCardProps) {
+  const powered = runtime?.powered ?? controls.powered;
+  const muted = runtime?.muted ?? controls.muted;
   const level = runtime ? Math.min(runtime.peak * 600, 100) : 0;
   const gateStatusTone = runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'warning' : 'neutral';
   const runtimeStatusTone = runtime?.status === 'error' ? 'danger' : 'neutral';
@@ -54,10 +67,33 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <StatusPill tone={gateStatusTone}>
+        <StatusPill tone={!powered ? 'neutral' : gateStatusTone}>
           {runtime?.isFloor ? 'Talking now' : runtime?.gateOpen ? 'Signal detected' : 'Idle'}
         </StatusPill>
         <StatusPill tone={runtimeStatusTone}>{runtime?.status ?? 'idle'}</StatusPill>
+        {!powered ? <StatusPill tone="danger">Powered off</StatusPill> : null}
+        {muted ? <StatusPill tone="warning">Muted</StatusPill> : null}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button
+          aria-label={`${powered ? 'Power off' : 'Power on'} ${feed.label}`}
+          className={powered ? undefined : 'border-rose-300/30 bg-rose-300/12 text-rose-100 enabled:hover:bg-rose-300/18'}
+          disabled={controlsDisabled}
+          variant="secondary"
+          onClick={() => onFeedPoweredChange(feed.id, !powered)}
+        >
+          {powered ? 'Power off' : 'Power on'}
+        </Button>
+        <Button
+          aria-label={`${muted ? 'Unmute' : 'Mute'} ${feed.label}`}
+          className={muted ? 'border-amber-300/30 bg-amber-300/12 text-amber-100 enabled:hover:bg-amber-300/18' : undefined}
+          disabled={controlsDisabled}
+          variant="secondary"
+          onClick={() => onFeedMutedChange(feed.id, !muted)}
+        >
+          {muted ? 'Unmute' : 'Mute'}
+        </Button>
       </div>
 
       <div className={cn(insetBlockClass, 'grid gap-3')}>

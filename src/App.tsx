@@ -14,6 +14,7 @@ import {
   normalizeAudioProcessingSettings,
   type AudioProcessingSettings,
   type EngineSnapshot,
+  type FeedDef,
   type FeedSelection,
   type ImportNotice
 } from './domain/models';
@@ -34,6 +35,20 @@ const EMPTY_ENGINE_SNAPSHOT: EngineSnapshot = {
   feeds: {}
 };
 
+interface ConsoleFeedControlState {
+  powered: boolean;
+  muted: boolean;
+}
+
+const DEFAULT_CONSOLE_FEED_CONTROL_STATE: ConsoleFeedControlState = {
+  powered: true,
+  muted: false
+};
+
+function createConsoleFeedControls(feeds: FeedDef[]): Record<string, ConsoleFeedControlState> {
+  return Object.fromEntries(feeds.map((feed) => [feed.id, { ...DEFAULT_CONSOLE_FEED_CONTROL_STATE }]));
+}
+
 export default function App() {
   const [appState, setAppState] = useState(DEFAULT_APP_STATE);
   const [activeView, setActiveView] = useState<'library' | 'console'>('library');
@@ -43,6 +58,7 @@ export default function App() {
   const [isImporting, setIsImporting] = useState(false);
   const [isAudioSettingsOpen, setIsAudioSettingsOpen] = useState(false);
   const [isDebugPanelVisible, setIsDebugPanelVisible] = useState(false);
+  const [consoleFeedControls, setConsoleFeedControls] = useState<Record<string, ConsoleFeedControlState>>({});
   const engineRef = useRef<PriorityAudioEngine | null>(null);
 
   useEffect(() => {
@@ -114,6 +130,24 @@ export default function App() {
   const airportFeeds = selectedAirport?.airport.feeds ?? [];
   const selectedFeedIdsSet = new Set(appState.selectedFeedIds);
   const selectedFeeds = airportFeeds.filter((feed) => selectedFeedIdsSet.has(feed.id));
+  const consoleFeedControlStates = useMemo<Record<string, ConsoleFeedControlState>>(
+    () =>
+      Object.fromEntries(
+        selectedFeeds.map((feed) => {
+          const runtime = engineSnapshot.feeds[feed.id];
+          const control = consoleFeedControls[feed.id];
+
+          return [
+            feed.id,
+            {
+              powered: runtime?.powered ?? control?.powered ?? DEFAULT_CONSOLE_FEED_CONTROL_STATE.powered,
+              muted: runtime?.muted ?? control?.muted ?? DEFAULT_CONSOLE_FEED_CONTROL_STATE.muted
+            }
+          ];
+        })
+      ),
+    [consoleFeedControls, engineSnapshot.feeds, selectedFeeds]
+  );
 
   const handleImportFiles = async (files: FileList | null) => {
     const nextFiles = Array.from(files ?? []);
@@ -228,6 +262,8 @@ export default function App() {
       return;
     }
 
+    setConsoleFeedControls(createConsoleFeedControls(selectedFeeds));
+
     const selections: FeedSelection[] = selectedFeeds.map((feed, index) => ({
       feed,
       priority: feedPriorities[feed.id] ?? index + 1,
@@ -240,7 +276,48 @@ export default function App() {
 
   const handleStopListening = async () => {
     await engineRef.current?.stop();
+    setConsoleFeedControls({});
   };
+
+  const handleFeedPoweredChange = useCallback((feedId: string, powered: boolean) => {
+    setConsoleFeedControls((previous) => {
+      const current = previous[feedId] ?? DEFAULT_CONSOLE_FEED_CONTROL_STATE;
+
+      if (current.powered === powered) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [feedId]: {
+          ...current,
+          powered
+        }
+      };
+    });
+
+    engineRef.current?.setFeedPowered(feedId, powered);
+  }, []);
+
+  const handleFeedMutedChange = useCallback((feedId: string, muted: boolean) => {
+    setConsoleFeedControls((previous) => {
+      const current = previous[feedId] ?? DEFAULT_CONSOLE_FEED_CONTROL_STATE;
+
+      if (current.muted === muted) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [feedId]: {
+          ...current,
+          muted
+        }
+      };
+    });
+
+    engineRef.current?.setFeedMuted(feedId, muted);
+  }, []);
 
   const handleAudioProcessingSettingChange = useCallback(
     (setting: keyof AudioProcessingSettings, value: number) => {
@@ -321,12 +398,16 @@ export default function App() {
           <ConsoleView
             airportName={selectedAirport ? formatAirportLabel(selectedAirport.airport, selectedAirport.packName) : ''}
             feeds={selectedFeeds}
+            feedControls={consoleFeedControlStates}
             feedPriorities={feedPriorities}
             feedSquelchThresholdsDb={activeFeedSquelchThresholdsDb}
             engineSnapshot={engineSnapshot}
             isDebugVisible={isDebugPanelVisible}
+            isRunning={engineSnapshot.running}
             onStart={handleStartListening}
             onStop={handleStopListening}
+            onFeedMutedChange={handleFeedMutedChange}
+            onFeedPoweredChange={handleFeedPoweredChange}
             onFeedSquelchChange={handleFeedSquelchChange}
             onToggleDebug={() => setIsDebugPanelVisible((current) => !current)}
           />

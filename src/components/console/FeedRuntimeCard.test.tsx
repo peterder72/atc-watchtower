@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EngineFeedState, FeedDef } from '../../domain/models';
 import { FeedRuntimeCard } from './FeedRuntimeCard';
@@ -14,6 +14,8 @@ const baseRuntime: EngineFeedState = {
   feedId: 'tower',
   label: 'EHEH Tower',
   priority: 1,
+  powered: true,
+  muted: false,
   isFloor: false,
   gateOpen: false,
   level: 0.08,
@@ -25,42 +27,82 @@ afterEach(() => {
   cleanup();
 });
 
-function renderCard(runtime: EngineFeedState) {
+function renderCard(runtime: EngineFeedState, controlsDisabled = false) {
+  const onFeedPoweredChange = vi.fn();
+  const onFeedMutedChange = vi.fn();
+
   render(
     <FeedRuntimeCard
+      controls={{ powered: runtime.powered, muted: runtime.muted }}
+      controlsDisabled={controlsDisabled}
       feed={feed}
       priority={1}
       runtime={runtime}
+      onFeedMutedChange={onFeedMutedChange}
+      onFeedPoweredChange={onFeedPoweredChange}
       onFeedSquelchChange={vi.fn()}
     />
   );
 
-  return screen.getByRole('heading', { name: feed.label }).closest('article');
+  return {
+    article: screen.getByRole('heading', { name: feed.label }).closest('article'),
+    onFeedMutedChange,
+    onFeedPoweredChange
+  };
 }
 
 describe('FeedRuntimeCard', () => {
   it('adds the green podium highlight when the feed has the floor', () => {
-    const card = renderCard({
+    const { article } = renderCard({
       ...baseRuntime,
       isFloor: true,
       gateOpen: true
     });
 
-    expect(card).toBeTruthy();
-    expect(card?.className).toContain('border-success/45');
-    expect(card?.className).toContain('shadow-floor');
-    expect(card?.className).toContain('transition-[border-color,box-shadow]');
+    expect(article).toBeTruthy();
+    expect(article?.className).toContain('border-success/45');
+    expect(article?.className).toContain('shadow-floor');
+    expect(article?.className).toContain('transition-[border-color,box-shadow]');
   });
 
   it('does not add the podium highlight when the feed is not the floor owner', () => {
-    const card = renderCard(baseRuntime);
+    const { article } = renderCard(baseRuntime);
 
-    expect(card).toBeTruthy();
-    expect(card?.className).not.toContain('border-success/45');
-    expect(card?.className).not.toContain('shadow-floor');
-    expect(card?.className).toContain('shadow-panel');
-    expect(screen.queryByText('Gate')).toBeNull();
-    expect(screen.queryByText('Priority')).toBeNull();
-    expect(screen.queryByText('Floor owner')).toBeNull();
+    expect(article).toBeTruthy();
+    expect(article?.className).not.toContain('border-success/45');
+    expect(article?.className).not.toContain('shadow-floor');
+    expect(article?.className).toContain('shadow-panel');
+  });
+
+  it('renders power and mute controls and forwards button actions', () => {
+    const { onFeedMutedChange, onFeedPoweredChange } = renderCard(baseRuntime);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Power off EHEH Tower' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mute EHEH Tower' }));
+
+    expect(onFeedPoweredChange).toHaveBeenCalledWith('tower', false);
+    expect(onFeedMutedChange).toHaveBeenCalledWith('tower', true);
+  });
+
+  it('shows powered-off and muted pills without floor highlight', () => {
+    const { article } = renderCard({
+      ...baseRuntime,
+      powered: false,
+      muted: true,
+      status: 'idle'
+    });
+
+    expect(screen.getByText('Powered off')).toBeTruthy();
+    expect(screen.getByText('Muted')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Power on EHEH Tower' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Unmute EHEH Tower' })).toBeTruthy();
+    expect(article?.className).not.toContain('border-success/45');
+  });
+
+  it('disables feed controls when the console is not running', () => {
+    renderCard(baseRuntime, true);
+
+    expect((screen.getByRole('button', { name: 'Power off EHEH Tower' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Mute EHEH Tower' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

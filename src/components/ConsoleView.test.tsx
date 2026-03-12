@@ -13,14 +13,16 @@ const feeds: FeedDef[] = [
   }
 ];
 
-const engineSnapshot: EngineSnapshot = {
-  running: false,
+const runningSnapshot: EngineSnapshot = {
+  running: true,
   floorFeedId: null,
   feeds: {
     tower: {
       feedId: 'tower',
       label: 'EHEH Tower',
       priority: 1,
+      powered: true,
+      muted: false,
       isFloor: false,
       gateOpen: false,
       level: 0,
@@ -46,12 +48,16 @@ function ConsoleViewHarness() {
     <ConsoleView
       airportName="EHEH"
       feeds={feeds}
+      feedControls={{ tower: { powered: true, muted: false } }}
       feedPriorities={{ tower: 1 }}
       feedSquelchThresholdsDb={{}}
-      engineSnapshot={engineSnapshot}
+      engineSnapshot={runningSnapshot}
       isDebugVisible={isDebugVisible}
+      isRunning={runningSnapshot.running}
       onStart={vi.fn()}
       onStop={vi.fn()}
+      onFeedMutedChange={vi.fn()}
+      onFeedPoweredChange={vi.fn()}
       onFeedSquelchChange={vi.fn()}
       onToggleDebug={() => setIsDebugVisible((current) => !current)}
     />
@@ -69,5 +75,35 @@ describe('ConsoleView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide debug' }));
     expect(screen.queryByRole('heading', { name: 'Signal pipeline' })).toBeNull();
+  });
+
+  it('wires feed power and mute controls to the provided handlers', () => {
+    const onFeedPoweredChange = vi.fn();
+    const onFeedMutedChange = vi.fn();
+
+    render(
+      <ConsoleView
+        airportName="EHEH"
+        feeds={feeds}
+        feedControls={{ tower: { powered: true, muted: false } }}
+        feedPriorities={{ tower: 1 }}
+        feedSquelchThresholdsDb={{}}
+        engineSnapshot={runningSnapshot}
+        isDebugVisible={false}
+        isRunning={runningSnapshot.running}
+        onStart={vi.fn()}
+        onStop={vi.fn()}
+        onFeedMutedChange={onFeedMutedChange}
+        onFeedPoweredChange={onFeedPoweredChange}
+        onFeedSquelchChange={vi.fn()}
+        onToggleDebug={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Power off EHEH Tower' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mute EHEH Tower' }));
+
+    expect(onFeedPoweredChange).toHaveBeenCalledWith('tower', false);
+    expect(onFeedMutedChange).toHaveBeenCalledWith('tower', true);
   });
 });

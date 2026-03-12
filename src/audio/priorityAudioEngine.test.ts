@@ -19,6 +19,10 @@ interface MockMediaElement {
   networkState: number;
   currentTime: number;
   paused: boolean;
+  src: string;
+  pause: () => void;
+  load: () => void;
+  play: () => Promise<void>;
 }
 
 interface TestRuntime {
@@ -95,16 +99,30 @@ function createRuntime(
     (engine as unknown as { audioProcessingSettings: AudioProcessingSettings }).audioProcessingSettings ??
     DEFAULT_AUDIO_PROCESSING_SETTINGS;
   const playbackDelayMs = getPlaybackDelayMs(audioProcessingSettings);
-  const element: MockMediaElement = {
-    readyState: HTMLMediaElement.HAVE_NOTHING,
-    networkState: HTMLMediaElement.NETWORK_EMPTY,
-    currentTime: 0,
-    paused: false
-  };
+  const element = {} as MockMediaElement;
+  element.readyState = HTMLMediaElement.HAVE_NOTHING;
+  element.networkState = HTMLMediaElement.NETWORK_EMPTY;
+  element.currentTime = 0;
+  element.paused = false;
+  element.src = selection.feed.streamUrl;
+  element.pause = vi.fn(() => {
+    element.paused = true;
+  });
+  element.load = vi.fn(() => {
+    element.currentTime = 0;
+    element.readyState = HTMLMediaElement.HAVE_NOTHING;
+    element.networkState = element.src ? HTMLMediaElement.NETWORK_LOADING : HTMLMediaElement.NETWORK_EMPTY;
+  });
+  element.play = vi.fn(async () => {
+    element.paused = false;
+    element.networkState = HTMLMediaElement.NETWORK_LOADING;
+  });
   const runtimeState: EngineFeedState = {
     feedId: selection.feed.id,
     label: selection.feed.label,
     priority: selection.priority,
+    powered: true,
+    muted: false,
     isFloor: false,
     gateOpen: false,
     level: 0,
@@ -329,6 +347,108 @@ describe('PriorityAudioEngine', () => {
     expect(engine.getSnapshot().floorFeedId).toBe('approach');
     expect(towerRuntime.state.isFloor).toBe(false);
     expect(approachRuntime.state.isFloor).toBe(true);
+  });
+
+  it('muting the current floor owner immediately transfers the floor', () => {
+    const engine = new PriorityAudioEngine();
+    const towerAmplitude = { value: 0.2 };
+    const groundAmplitude = { value: 0.2 };
+    const { runtime: towerRuntime } = createRuntime(engine, createSelection('tower', 1, 0), towerAmplitude);
+    const { runtime: groundRuntime } = createRuntime(engine, createSelection('ground', 2, 1), groundAmplitude);
+
+    for (let now = 20; now <= 200; now += ANALYSIS_INTERVAL_MS) {
+      runAnalysis(engine, now);
+    }
+
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+    expect(towerRuntime.state.isFloor).toBe(true);
+    expect(groundRuntime.state.isFloor).toBe(false);
+
+    engine.setFeedMuted('tower', true);
+
+    expect(towerRuntime.state.muted).toBe(true);
+    expect(towerRuntime.state.isFloor).toBe(false);
+    expect(groundRuntime.state.isFloor).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBe('ground');
+  });
+
+  it('treats unmuting a gate-open feed as a fresh opening', () => {
+    const engine = new PriorityAudioEngine();
+    const towerAmplitude = { value: 0.2 };
+    const approachAmplitude = { value: 0.2 };
+    const { runtime: towerRuntime } = createRuntime(engine, createSelection('tower', 1, 1), towerAmplitude);
+    const { runtime: approachRuntime } = createRuntime(engine, createSelection('approach', 1, 0), approachAmplitude);
+
+    engine.setFeedMuted('approach', true);
+
+    for (let now = 20; now <= 200; now += ANALYSIS_INTERVAL_MS) {
+      runAnalysis(engine, now);
+    }
+
+    expect(towerRuntime.state.isFloor).toBe(true);
+    expect(approachRuntime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+
+    const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(210);
+    engine.setFeedMuted('approach', false);
+    nowSpy.mockRestore();
+
+    expect(approachRuntime.state.muted).toBe(false);
+    expect(approachRuntime.audibleGateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBe('tower');
+    expect(towerRuntime.state.isFloor).toBe(true);
+    expect(approachRuntime.state.isFloor).toBe(false);
+  });
+
+  it('powering off clears pending delayed openings and resets feed state', () => {
+    const engine = new PriorityAudioEngine();
+    const amplitudeRef = { value: 0.2 };
+    const { element, runtime } = createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef);
+
+    runAnalysis(engine, 20);
+    runAnalysis(engine, 40);
+    runAnalysis(engine, 60);
+
+    expect(runtime.state.gateOpen).toBe(true);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+
+    engine.setFeedPowered('tower', false);
+
+    expect(runtime.state.powered).toBe(false);
+    expect(runtime.state.gateOpen).toBe(false);
+    expect(runtime.state.level).toBe(0);
+    expect(runtime.state.peak).toBe(0);
+    expect(runtime.state.isFloor).toBe(false);
+    expect(element.pause).toHaveBeenCalled();
+    expect(element.load).toHaveBeenCalled();
+
+    runAnalysis(engine, 200);
+    expect(engine.getSnapshot().floorFeedId).toBeNull();
+    expect(runtime.state.isFloor).toBe(false);
+  });
+
+  it('powering back on returns to loading state and preserves mute', () => {
+    const engine = new PriorityAudioEngine();
+    const amplitudeRef = { value: 0.2 };
+    const { element, runtime } = createRuntime(engine, createSelection('tower', 1, 0), amplitudeRef);
+
+    engine.setFeedMuted('tower', true);
+    engine.setFeedPowered('tower', false);
+    engine.setFeedPowered('tower', true);
+
+    expect(runtime.state.powered).toBe(true);
+    expect(runtime.state.muted).toBe(true);
+    expect(runtime.state.status).toBe('loading');
+    expect(runtime.state.gateOpen).toBe(false);
+    expect(element.src).toBe('https://example.com/tower');
+    expect(element.play).toHaveBeenCalled();
+
+    element.readyState = HTMLMediaElement.HAVE_CURRENT_DATA;
+    element.paused = false;
+
+    runAnalysis(engine, ANALYSIS_INTERVAL_MS);
+
+    expect(runtime.state.status).toBe('ready');
   });
 
   it('reschedules delayed openings when audio settings change live', () => {
