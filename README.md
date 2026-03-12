@@ -5,6 +5,8 @@
 
 ATC Watchtower is a static React application for monitoring multiple ATC audio feeds from one browser UI. It imports local playlist files, validates browser-readable stream URLs, stores the resulting feed packs in IndexedDB, and uses priority-based arbitration so only the highest-priority active transmission stays audible.
 
+**Demo:** [https://peterder72.github.io/atc-watchtower/](https://peterder72.github.io/atc-watchtower/)
+
 ## What It Does
 
 - Imports local `.pls`, `.m3u`, `.m3u8`, and FeedPack v1 JSON files.
