@@ -4,22 +4,46 @@
 
 @layer base {
   :root {
-    --wt-bg: #0c0f0c;
-    --wt-bg-soft: #131713;
-    --wt-panel: #1a2018;
-    --wt-panel-2: #151a14;
-    --wt-screen: #101410;
-    --wt-border: #434a3d;
-    --wt-border-strong: #5b6453;
-    --wt-text: #f0ecd9;
-    --wt-text-dim: #b6b19d;
-    --wt-muted: #a19d88;
-    --wt-accent: #f4b03e;
-    --wt-accent-strong: #ffd16e;
-    --wt-accent-soft: #d8ad52;
-    --wt-ok: #8fdc9a;
-    --wt-danger: #ff7661;
+    --wt-bg: #010204;
+    --wt-bg-soft: #05070b;
+    --wt-panel: #0f1319;
+    --wt-panel-2: #0b0f15;
+    --wt-screen: #06090d;
+    --wt-border: #27303d;
+    --wt-border-strong: #445062;
+    --wt-text: #f2f5f7;
+    --wt-text-dim: #93a0b4;
+    --wt-muted: #7c889c;
+    --wt-accent: #ffbf4d;
+    --wt-accent-strong: #ffd978;
+    --wt-accent-soft: #8cbcff;
+    --wt-ok: #6fd6ff;
+    --wt-danger: #ff6f7d;
     --wt-ink-strong: #211b09;
+    --wt-ambient-left: rgba(140, 188, 255, 0.08);
+    --wt-ambient-right: rgba(255, 191, 77, 0.06);
+    --wt-selection: rgba(255, 191, 77, 0.35);
+    --wt-overlay: rgba(5, 7, 5, 0.86);
+    --wt-shadow-panel: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 24px rgba(0, 0, 0, 0.3);
+    --wt-shadow-panel-soft: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    --wt-shadow-panel-softer: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    --wt-shadow-dialog: 0 18px 40px rgba(0, 0, 0, 0.45);
+    --wt-tone-accent-border: rgba(255, 191, 77, 0.55);
+    --wt-tone-accent-bg: rgba(255, 191, 77, 0.14);
+    --wt-tone-accent-bg-soft: rgba(255, 191, 77, 0.12);
+    --wt-tone-accent-outline: rgba(255, 191, 77, 0.35);
+    --wt-tone-warning-border: rgba(255, 191, 77, 0.55);
+    --wt-tone-warning-bg: rgba(255, 191, 77, 0.1);
+    --wt-tone-success-border: rgba(111, 214, 255, 0.55);
+    --wt-tone-success-bg: rgba(111, 214, 255, 0.12);
+    --wt-tone-success-bg-soft: rgba(111, 214, 255, 0.08);
+    --wt-tone-success-bg-faint: rgba(111, 214, 255, 0.05);
+    --wt-tone-success-outline: rgba(111, 214, 255, 0.38);
+    --wt-tone-danger-border: rgba(255, 111, 125, 0.55);
+    --wt-tone-danger-bg: rgba(255, 111, 125, 0.12);
+    --wt-tone-danger-bg-strong: rgba(255, 111, 125, 0.14);
+    --wt-tone-danger-hover-border: rgba(255, 111, 125, 0.75);
+    --wt-tone-danger-hover-bg: rgba(255, 111, 125, 0.2);
   }
 
   html,
@@ -32,7 +56,8 @@
     min-height: 100vh;
     margin: 0;
     background:
-      linear-gradient(180deg, rgba(255, 209, 110, 0.04), transparent 20%),
+      radial-gradient(circle at top left, var(--wt-ambient-left), transparent 24%),
+      radial-gradient(circle at top right, var(--wt-ambient-right), transparent 20%),
       linear-gradient(180deg, var(--wt-bg-soft) 0%, var(--wt-bg) 100%);
     color: var(--wt-text);
     font-family:
@@ -63,7 +88,7 @@
   }
 
   ::selection {
-    background: rgba(244, 176, 62, 0.35);
+    background: var(--wt-selection);
     color: var(--wt-text);
   }
 }

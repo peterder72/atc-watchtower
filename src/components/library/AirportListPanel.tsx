@@ -45,8 +45,8 @@ export function AirportListPanel({
               data-drop-active={dragOverAirportKey === entry.key ? 'true' : 'false'}
               className={cn(
                 'rounded-[6px] transition',
-                entry.key === selectedAirportKey && 'shadow-[0_0_0_1px_rgba(244,176,62,0.35)]',
-                dragOverAirportKey === entry.key && 'shadow-[0_0_0_1px_rgba(143,220,154,0.38)]'
+                entry.key === selectedAirportKey && 'shadow-[0_0_0_1px_var(--wt-tone-accent-outline)]',
+                dragOverAirportKey === entry.key && 'shadow-[0_0_0_1px_var(--wt-tone-success-outline)]'
               )}
               onDragLeave={(event) => onAirportDragLeave(event, entry.key)}
               onDragOver={(event) => onAirportDragOver(event, entry.key)}
@@ -57,10 +57,10 @@ export function AirportListPanel({
                 className={cn(
                   'grid w-full gap-3 rounded-[6px] border px-3 py-3 text-left transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
                   entry.key === selectedAirportKey
-                    ? 'border-[var(--wt-accent-strong)] bg-[rgba(244,176,62,0.12)]'
+                    ? 'border-[var(--wt-accent-strong)] bg-[var(--wt-tone-accent-bg-soft)]'
                     : 'border-[var(--wt-border)] bg-[var(--wt-screen)] hover:border-[var(--wt-border-strong)] hover:text-[var(--wt-text)]',
                   dragOverAirportKey === entry.key &&
-                    'border-[var(--wt-ok)] bg-[rgba(143,220,154,0.08)]',
+                    'border-[var(--wt-ok)] bg-[var(--wt-tone-success-bg-soft)]',
                   isListening && 'cursor-not-allowed opacity-60'
                 )}
                 disabled={isListening}

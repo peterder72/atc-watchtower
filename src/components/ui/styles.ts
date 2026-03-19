@@ -2,15 +2,15 @@ import { cn } from '../../lib/cn';
 
 export const pageShellClass = 'mx-auto flex min-h-screen w-full max-w-[112rem] flex-col gap-4 px-3 py-3 sm:px-5 sm:py-5 lg:px-6';
 export const panelClass =
-  'rounded-[8px] border border-[var(--wt-border-strong)] bg-[var(--wt-panel)] px-4 py-4 shadow-[inset_0_1px_0_rgba(247,241,222,0.05),0_10px_24px_rgba(0,0,0,0.28)]';
+  'rounded-[8px] border border-[var(--wt-border-strong)] bg-[var(--wt-panel)] px-4 py-4 shadow-[var(--wt-shadow-panel)]';
 export const subPanelClass =
-  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] px-4 py-4 shadow-[inset_0_1px_0_rgba(247,241,222,0.03)]';
+  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] px-4 py-4 shadow-[var(--wt-shadow-panel-soft)]';
 export const statCardClass =
-  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[inset_0_1px_0_rgba(247,241,222,0.03)]';
+  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[var(--wt-shadow-panel-soft)]';
 export const feedCardClass =
-  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] p-4 shadow-[inset_0_1px_0_rgba(247,241,222,0.03)]';
+  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] p-4 shadow-[var(--wt-shadow-panel-soft)]';
 export const insetBlockClass =
-  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[inset_0_1px_0_rgba(247,241,222,0.02)]';
+  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[var(--wt-shadow-panel-softer)]';
 export const eyebrowClass = 'text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[var(--wt-accent-soft)]';
 export const fieldLabelClass = 'text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--wt-muted)]';
 export const titleClass = 'text-[1.125rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]';
@@ -26,7 +26,7 @@ const buttonVariantClass = {
   secondary:
     'border-[var(--wt-border-strong)] bg-[var(--wt-screen)] text-[var(--wt-text)] enabled:hover:border-[var(--wt-accent-soft)] enabled:hover:text-[var(--wt-accent)]',
   danger:
-    'border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.14)] text-[var(--wt-danger)] enabled:hover:border-[rgba(255,118,97,0.75)] enabled:hover:bg-[rgba(255,118,97,0.2)]'
+    'border-[var(--wt-tone-danger-border)] bg-[var(--wt-tone-danger-bg-strong)] text-[var(--wt-danger)] enabled:hover:border-[var(--wt-tone-danger-hover-border)] enabled:hover:bg-[var(--wt-tone-danger-hover-bg)]'
 } as const;
 
 export type ButtonVariant = keyof typeof buttonVariantClass;

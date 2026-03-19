@@ -84,9 +84,9 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
       className={cn(
         feedCardClass,
         'grid gap-4 transition-[border-color,background-color] duration-150',
-        runtime?.isFloor && 'border-[rgba(143,220,154,0.55)] bg-[rgba(143,220,154,0.04)]',
-        !runtime?.isFloor && runtime?.gateOpen && 'border-[rgba(244,176,62,0.55)]',
-        runtime?.status === 'error' && 'border-[rgba(255,118,97,0.55)]'
+        runtime?.isFloor && 'border-[var(--wt-tone-success-border)] bg-[var(--wt-tone-success-bg-faint)]',
+        !runtime?.isFloor && runtime?.gateOpen && 'border-[var(--wt-tone-accent-border)]',
+        runtime?.status === 'error' && 'border-[var(--wt-tone-danger-border)]'
       )}
     >
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
@@ -136,7 +136,7 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
       <div className="grid gap-2 sm:grid-cols-2">
         <Button
           aria-label={`${powered ? 'Power off' : 'Power on'} ${feed.label}`}
-          className={powered ? undefined : 'border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.14)] text-[var(--wt-danger)]'}
+          className={powered ? undefined : 'border-[var(--wt-tone-danger-border)] bg-[var(--wt-tone-danger-bg-strong)] text-[var(--wt-danger)]'}
           disabled={controlsDisabled}
           variant="secondary"
           onClick={() => onFeedPoweredChange(feed.id, !powered)}
@@ -145,7 +145,7 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
         </Button>
         <Button
           aria-label={`${muted ? 'Unmute' : 'Mute'} ${feed.label}`}
-          className={muted ? 'border-[rgba(244,176,62,0.55)] bg-[rgba(244,176,62,0.14)] text-[var(--wt-accent)]' : undefined}
+          className={muted ? 'border-[var(--wt-tone-accent-border)] bg-[var(--wt-tone-accent-bg)] text-[var(--wt-accent)]' : undefined}
           disabled={controlsDisabled}
           variant="secondary"
           onClick={() => onFeedMutedChange(feed.id, !muted)}
@@ -178,7 +178,7 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
       <MeterRail label="Peak" tone={meterTone} value={level} valueText={formatLevel(runtime?.peak ?? 0)} />
 
       {runtime?.error ? (
-        <p className="rounded-[6px] border border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.12)] px-3 py-2 text-[0.82rem] text-[var(--wt-danger)]">
+        <p className="rounded-[6px] border border-[var(--wt-tone-danger-border)] bg-[var(--wt-tone-danger-bg)] px-3 py-2 text-[0.82rem] text-[var(--wt-danger)]">
           {runtime.error}
         </p>
       ) : null}

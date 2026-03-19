@@ -65,11 +65,11 @@ export function FeedDeckPanel({
                 className={cn(
                   'grid gap-3 rounded-[6px] border px-3 py-3 transition md:grid-cols-[auto_auto_minmax(0,1.2fr)_minmax(0,0.9fr)] md:items-center',
                   selected
-                    ? 'border-[var(--wt-accent-strong)] bg-[rgba(244,176,62,0.12)]'
+                    ? 'border-[var(--wt-accent-strong)] bg-[var(--wt-tone-accent-bg-soft)]'
                     : 'border-[var(--wt-border)] bg-[var(--wt-screen)]',
                   draggedFeedId === feed.id && 'opacity-55',
                   dragOverFeedId === feed.id &&
-                    'border-[var(--wt-ok)] bg-[rgba(143,220,154,0.08)]',
+                    'border-[var(--wt-ok)] bg-[var(--wt-tone-success-bg-soft)]',
                   isListening && 'cursor-not-allowed'
                 )}
                 draggable={!isListening}

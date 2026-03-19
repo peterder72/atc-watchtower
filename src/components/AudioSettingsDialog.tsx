@@ -117,7 +117,7 @@ export function AudioSettingsDialog({ isOpen, settings, onChange, onClose, onRes
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,7,5,0.86)] px-4 py-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--wt-overlay)] px-4 py-6"
       onClick={onClose}
     >
       <div
@@ -125,7 +125,7 @@ export function AudioSettingsDialog({ isOpen, settings, onChange, onClose, onRes
         aria-modal="true"
         className={cn(
           panelClass,
-          'w-full max-w-3xl space-y-5 border-[var(--wt-border-strong)] bg-[var(--wt-panel)] shadow-[0_18px_40px_rgba(0,0,0,0.45)]'
+          'w-full max-w-3xl space-y-5 border-[var(--wt-border-strong)] bg-[var(--wt-panel)] shadow-[var(--wt-shadow-dialog)]'
         )}
         role="dialog"
         onClick={(event) => event.stopPropagation()}

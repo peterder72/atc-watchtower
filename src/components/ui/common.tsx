@@ -14,10 +14,10 @@ import {
 
 const toneClass = {
   neutral: 'border-[var(--wt-border)] bg-[var(--wt-screen)] text-[var(--wt-muted)]',
-  accent: 'border-[rgba(244,176,62,0.55)] bg-[rgba(244,176,62,0.14)] text-[var(--wt-accent)]',
-  warning: 'border-[rgba(244,176,62,0.55)] bg-[rgba(244,176,62,0.1)] text-[var(--wt-accent)]',
-  success: 'border-[rgba(143,220,154,0.55)] bg-[rgba(143,220,154,0.12)] text-[var(--wt-ok)]',
-  danger: 'border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.12)] text-[var(--wt-danger)]'
+  accent: 'border-[var(--wt-tone-accent-border)] bg-[var(--wt-tone-accent-bg)] text-[var(--wt-accent)]',
+  warning: 'border-[var(--wt-tone-warning-border)] bg-[var(--wt-tone-warning-bg)] text-[var(--wt-accent)]',
+  success: 'border-[var(--wt-tone-success-border)] bg-[var(--wt-tone-success-bg)] text-[var(--wt-ok)]',
+  danger: 'border-[var(--wt-tone-danger-border)] bg-[var(--wt-tone-danger-bg)] text-[var(--wt-danger)]'
 } as const;
 
 export type Tone = keyof typeof toneClass;

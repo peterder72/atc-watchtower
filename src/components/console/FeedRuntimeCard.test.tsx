@@ -63,7 +63,7 @@ describe('FeedRuntimeCard', () => {
 
     expect(article).toBeTruthy();
     expect(article?.getAttribute('data-floor')).toBe('true');
-    expect(article?.className).toContain('border-[rgba(143,220,154,0.55)]');
+    expect(article?.className).toContain('border-[var(--wt-tone-success-border)]');
     expect(screen.getByText('Talking now')).toBeTruthy();
   });
 
@@ -76,7 +76,7 @@ describe('FeedRuntimeCard', () => {
     expect(article).toBeTruthy();
     expect(article?.getAttribute('data-floor')).toBe('false');
     expect(article?.getAttribute('data-gate')).toBe('open');
-    expect(article?.className).toContain('border-[rgba(244,176,62,0.55)]');
+    expect(article?.className).toContain('border-[var(--wt-tone-accent-border)]');
     expect(screen.getByText('Signal detected')).toBeTruthy();
   });
 
