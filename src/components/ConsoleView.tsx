@@ -69,7 +69,7 @@ export function ConsoleView({
         <EmptyState>Select one or more feeds in the Library before starting the console.</EmptyState>
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {feeds.map((feed) => {
               return (
                 <FeedRuntimeCard

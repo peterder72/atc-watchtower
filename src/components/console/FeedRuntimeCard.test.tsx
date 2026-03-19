@@ -62,18 +62,22 @@ describe('FeedRuntimeCard', () => {
     });
 
     expect(article).toBeTruthy();
-    expect(article?.className).toContain('border-success/45');
-    expect(article?.className).toContain('shadow-floor');
-    expect(article?.className).toContain('transition-[border-color,box-shadow]');
+    expect(article?.getAttribute('data-floor')).toBe('true');
+    expect(article?.className).toContain('border-[rgba(143,220,154,0.55)]');
+    expect(screen.getByText('Talking now')).toBeTruthy();
   });
 
-  it('does not add the podium highlight when the feed is not the floor owner', () => {
-    const { article } = renderCard(baseRuntime);
+  it('marks a non-floor open feed as an active signal', () => {
+    const { article } = renderCard({
+      ...baseRuntime,
+      gateOpen: true
+    });
 
     expect(article).toBeTruthy();
-    expect(article?.className).not.toContain('border-success/45');
-    expect(article?.className).not.toContain('shadow-floor');
-    expect(article?.className).toContain('shadow-panel');
+    expect(article?.getAttribute('data-floor')).toBe('false');
+    expect(article?.getAttribute('data-gate')).toBe('open');
+    expect(article?.className).toContain('border-[rgba(244,176,62,0.55)]');
+    expect(screen.getByText('Signal detected')).toBeTruthy();
   });
 
   it('renders power and mute controls and forwards button actions', () => {
@@ -98,7 +102,7 @@ describe('FeedRuntimeCard', () => {
     expect(screen.getByText('Muted')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Power on EHEH Tower' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Unmute EHEH Tower' })).toBeTruthy();
-    expect(article?.className).not.toContain('border-success/45');
+    expect(article?.getAttribute('data-floor')).toBe('false');
   });
 
   it('disables feed controls when the console is not running', () => {
@@ -112,17 +116,22 @@ describe('FeedRuntimeCard', () => {
     renderCard(baseRuntime);
 
     expect(screen.getByText('1.4 s')).toBeTruthy();
-    expect(screen.getByText('1.4 s').closest('[title]')?.getAttribute('title')).toContain('Built-in monitor delay: 0.2 s');
-    expect(screen.getByText('1.4 s').closest('[title]')?.getAttribute('title')).toContain('Total heard delay: 1.6 s');
+    expect(screen.getByText('Browser live-edge data available.').closest('[title]')?.getAttribute('title')).toContain(
+      'Built-in monitor delay: 0.2 s'
+    );
+    expect(screen.getByText('Browser live-edge data available.').closest('[title]')?.getAttribute('title')).toContain(
+      'Total heard delay: 1.6 s'
+    );
   });
 
-  it('hides the lag panel when the browser does not expose a live edge', () => {
+  it('shows an unavailable lag state when the browser does not expose a live edge', () => {
     renderCard({
       ...baseRuntime,
       streamDelayMs: null
     });
 
-    expect(screen.queryByText('Extra lag')).toBeNull();
-    expect(screen.queryByText('Unknown')).toBeNull();
+    expect(screen.getByText('Extra lag')).toBeTruthy();
+    expect(screen.getByText('N/A')).toBeTruthy();
+    expect(screen.getByText('Browser did not expose live-edge delay.')).toBeTruthy();
   });
 });

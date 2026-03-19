@@ -17,7 +17,7 @@ import {
 } from '../domain/models';
 import { cn } from '../lib/cn';
 import { Button } from './ui/common';
-import { eyebrowClass, insetBlockClass, mutedTextClass, panelClass } from './ui/styles';
+import { eyebrowClass, fieldLabelClass, insetBlockClass, mutedTextClass, panelClass } from './ui/styles';
 
 interface AudioSettingsDialogProps {
   isOpen: boolean;
@@ -55,15 +55,15 @@ function SliderControl({
   return (
     <div className={cn(insetBlockClass, 'grid gap-3')}>
       <div className="flex items-baseline justify-between gap-3">
-        <label className="text-sm font-semibold text-stone-100" htmlFor={inputId}>
+        <label className="text-[0.85rem] font-semibold text-[var(--wt-text)]" htmlFor={inputId}>
           {label}
         </label>
-        <strong className="text-sm font-semibold text-stone-100">{formatValue(value)}</strong>
+        <strong className="text-[0.85rem] font-semibold text-[var(--wt-text)]">{formatValue(value)}</strong>
       </div>
       <p className={mutedTextClass}>{description}</p>
       <input
         id={inputId}
-        className="w-full accent-accent"
+        className="w-full"
         type="range"
         min={min}
         max={max}
@@ -71,7 +71,7 @@ function SliderControl({
         value={value}
         onChange={(event) => onChange(name, event.currentTarget.valueAsNumber)}
       />
-      <div className="flex justify-between gap-3 text-xs text-slate-400">
+      <div className="flex justify-between gap-3 text-[0.72rem] text-[var(--wt-muted)]">
         <span>{formatValue(min)}</span>
         <span>{formatValue(max)}</span>
       </div>
@@ -117,20 +117,23 @@ export function AudioSettingsDialog({ isOpen, settings, onChange, onClose, onRes
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/72 px-4 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(5,7,5,0.86)] px-4 py-6"
       onClick={onClose}
     >
       <div
         aria-labelledby={titleId}
         aria-modal="true"
-        className={cn(panelClass, 'w-full max-w-2xl space-y-5 border-white/12 bg-slate-950/95 shadow-2xl')}
+        className={cn(
+          panelClass,
+          'w-full max-w-3xl space-y-5 border-[var(--wt-border-strong)] bg-[var(--wt-panel)] shadow-[0_18px_40px_rgba(0,0,0,0.45)]'
+        )}
         role="dialog"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <p className={eyebrowClass}>Audio settings</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-stone-100" id={titleId}>
+            <h2 className="text-[1.25rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]" id={titleId}>
               Tune gate timing and sensitivity
             </h2>
             <p className={mutedTextClass}>Changes apply live while listening and save automatically.</p>
@@ -188,6 +191,16 @@ export function AudioSettingsDialog({ isOpen, settings, onChange, onClose, onRes
           />
         </div>
 
+        <div className={cn(insetBlockClass, 'grid gap-2')}>
+          <span className={fieldLabelClass}>Defaults</span>
+          <p className="text-[0.82rem] leading-5 text-[var(--wt-muted)]">
+            {formatMilliseconds(DEFAULT_AUDIO_PROCESSING_SETTINGS.attackMs)} start delay,{' '}
+            {formatMilliseconds(DEFAULT_AUDIO_PROCESSING_SETTINGS.hangMs)} end hold,{' '}
+            {formatDecibels(DEFAULT_AUDIO_PROCESSING_SETTINGS.openDeltaDb)} open delta,{' '}
+            {formatDecibels(DEFAULT_AUDIO_PROCESSING_SETTINGS.closeGapDb)} close gap.
+          </p>
+        </div>
+
         <div className="flex flex-wrap justify-end gap-3">
           <Button variant="secondary" onClick={onReset}>
             Reset defaults
@@ -195,12 +208,6 @@ export function AudioSettingsDialog({ isOpen, settings, onChange, onClose, onRes
           <Button onClick={onClose}>Done</Button>
         </div>
 
-        <p className="text-xs text-slate-400">
-          Defaults: {formatMilliseconds(DEFAULT_AUDIO_PROCESSING_SETTINGS.attackMs)} start delay,{' '}
-          {formatMilliseconds(DEFAULT_AUDIO_PROCESSING_SETTINGS.hangMs)} end hold,{' '}
-          {formatDecibels(DEFAULT_AUDIO_PROCESSING_SETTINGS.openDeltaDb)} open delta,{' '}
-          {formatDecibels(DEFAULT_AUDIO_PROCESSING_SETTINGS.closeGapDb)} close gap.
-        </p>
       </div>
     </div>
   );

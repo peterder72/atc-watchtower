@@ -1,21 +1,32 @@
 import { cn } from '../../lib/cn';
 
-export const pageShellClass = 'mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:px-6 sm:py-8 lg:px-8';
-export const panelClass = 'rounded-[28px] border border-white/10 bg-slate-950/72 p-5 shadow-panel backdrop-blur-xl';
-export const subPanelClass = 'rounded-[24px] border border-white/10 bg-slate-950/88 p-4 shadow-panel backdrop-blur-xl';
-export const statCardClass = 'rounded-[24px] border border-white/10 bg-slate-950/72 px-4 py-4 shadow-panel backdrop-blur-xl';
-export const feedCardClass = 'rounded-[24px] border border-white/10 bg-slate-950/72 p-4 backdrop-blur-xl';
-export const insetBlockClass = 'rounded-[18px] bg-white/[0.04] p-3';
-export const eyebrowClass = 'text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-teal';
-export const titleClass = 'text-xl font-semibold tracking-tight text-stone-100';
-export const mutedTextClass = 'text-sm leading-6 text-slate-300/75';
+export const pageShellClass = 'mx-auto flex min-h-screen w-full max-w-[112rem] flex-col gap-4 px-3 py-3 sm:px-5 sm:py-5 lg:px-6';
+export const panelClass =
+  'rounded-[8px] border border-[var(--wt-border-strong)] bg-[var(--wt-panel)] px-4 py-4 shadow-[inset_0_1px_0_rgba(247,241,222,0.05),0_10px_24px_rgba(0,0,0,0.28)]';
+export const subPanelClass =
+  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] px-4 py-4 shadow-[inset_0_1px_0_rgba(247,241,222,0.03)]';
+export const statCardClass =
+  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[inset_0_1px_0_rgba(247,241,222,0.03)]';
+export const feedCardClass =
+  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] p-4 shadow-[inset_0_1px_0_rgba(247,241,222,0.03)]';
+export const insetBlockClass =
+  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[inset_0_1px_0_rgba(247,241,222,0.02)]';
+export const eyebrowClass = 'text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[var(--wt-accent-soft)]';
+export const fieldLabelClass = 'text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--wt-muted)]';
+export const titleClass = 'text-[1.125rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]';
+export const mutedTextClass = 'text-[0.9rem] leading-5 text-[var(--wt-muted)]';
+export const segmentedShellClass = 'inline-grid grid-cols-2 gap-1 rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-screen)] p-1';
 
 const buttonBaseClass =
-  'inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:opacity-45';
+  'inline-flex min-h-10 items-center justify-center rounded-[6px] border px-3 py-2 text-[0.82rem] font-semibold uppercase tracking-[0.08em] transition duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--wt-accent)] disabled:pointer-events-none disabled:opacity-45';
 
 const buttonVariantClass = {
-  primary: 'bg-gradient-to-r from-accent to-amber-300 text-slate-950 enabled:hover:-translate-y-px enabled:hover:brightness-105',
-  secondary: 'border border-white/10 bg-white/7 text-stone-100 enabled:hover:border-white/20 enabled:hover:bg-white/10'
+  primary:
+    'border-[var(--wt-accent-strong)] bg-[var(--wt-accent)] text-[var(--wt-ink-strong)] enabled:hover:border-[var(--wt-accent-strong)] enabled:hover:bg-[var(--wt-accent-strong)]',
+  secondary:
+    'border-[var(--wt-border-strong)] bg-[var(--wt-screen)] text-[var(--wt-text)] enabled:hover:border-[var(--wt-accent-soft)] enabled:hover:text-[var(--wt-accent)]',
+  danger:
+    'border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.14)] text-[var(--wt-danger)] enabled:hover:border-[rgba(255,118,97,0.75)] enabled:hover:bg-[rgba(255,118,97,0.2)]'
 } as const;
 
 export type ButtonVariant = keyof typeof buttonVariantClass;

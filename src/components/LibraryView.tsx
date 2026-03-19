@@ -57,7 +57,7 @@ export function LibraryView({
   });
 
   return (
-    <section className={`${panelClass} space-y-4`}>
+    <section className={`${panelClass} space-y-5`}>
       <SectionHeading
         actions={
           <label
@@ -70,7 +70,7 @@ export function LibraryView({
               disabled={isBusy || isListening}
               multiple
               accept=".pls,.m3u,.m3u8,.json"
-              className="hidden"
+              className="sr-only"
               type="file"
               onChange={(event) => {
                 onImportFiles(event.target.files);
@@ -81,11 +81,11 @@ export function LibraryView({
           </label>
         }
         eyebrow="Library"
-        title="Imports and priorities"
-        description="Bring in local playlists, choose an airport, and arrange the feed order used by priority mode."
+        title="Feed Setup"
+        description="Import local playlists, choose an airport, and arrange priority order before opening the console."
       />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(290px,360px)_minmax(0,1fr)]">
         <AirportListPanel
           airports={airports}
           dragOverAirportKey={dragOverAirportKey}

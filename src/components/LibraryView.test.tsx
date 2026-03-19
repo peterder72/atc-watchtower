@@ -92,6 +92,30 @@ function renderLibraryView(overrides: Partial<ComponentProps<typeof LibraryView>
 }
 
 describe('LibraryView drag and drop', () => {
+  it('exposes the import control and forwards airport selection', () => {
+    const props = renderLibraryView();
+
+    expect(screen.getByLabelText('Import playlists')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /KJFK/i }));
+
+    expect(props.onAirportChange).toHaveBeenCalledWith(airports[1].key);
+  });
+
+  it('marks selected feed rows and disables setup controls while listening', () => {
+    renderLibraryView({
+      isListening: true,
+      selectedFeedIds: ['tower']
+    });
+
+    const selectedRow = screen.getByText('EHEH Tower').closest('label');
+
+    expect(selectedRow?.getAttribute('data-selected')).toBe('true');
+    expect((screen.getByLabelText('Select EHEH Tower') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /EHEH/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Import playlists') as HTMLInputElement).disabled).toBe(true);
+  });
+
   it('reorders feeds even if dragover cannot read the custom payload', () => {
     const props = renderLibraryView();
     const dataTransfer = createDataTransfer();
@@ -129,7 +153,7 @@ describe('LibraryView drag and drop', () => {
     const dataTransfer = createDataTransfer();
     const source = screen.getByText('EHEH Ground').closest('label');
     const target = screen.getByText('EHEH Tower').closest('label');
-    const targetChild = within(target!).getByText('Priority');
+    const targetChild = within(target!).getByText('https://example.com/tower');
 
     expect(source).toBeTruthy();
     expect(target).toBeTruthy();
@@ -138,10 +162,10 @@ describe('LibraryView drag and drop', () => {
     dataTransfer.getData = () => '';
     fireEvent.dragOver(target!, { dataTransfer });
 
-    expect(target!.className).toContain('border-[rgba(99,212,199,0.45)]');
+    expect(target?.getAttribute('data-drag-over')).toBe('true');
 
     fireEvent.dragLeave(target!, { dataTransfer, relatedTarget: targetChild });
 
-    expect(target!.className).toContain('border-[rgba(99,212,199,0.45)]');
+    expect(target?.getAttribute('data-drag-over')).toBe('true');
   });
 });

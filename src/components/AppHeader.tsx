@@ -1,11 +1,15 @@
 import { cn } from '../lib/cn';
-import { Button } from './ui/common';
+import { Button, SegmentedControl } from './ui/common';
+import { StatusStrip } from './StatusStrip';
 import { eyebrowClass, mutedTextClass, panelClass } from './ui/styles';
 
 interface AppHeaderProps {
   activeView: 'library' | 'console';
+  importedAirports: number;
+  liveFloorStatus: string;
   onOpenSettings: () => void;
   onViewChange: (view: 'library' | 'console') => void;
+  selectedFeeds: number;
 }
 
 const viewLabels = {
@@ -13,49 +17,41 @@ const viewLabels = {
   library: 'Library'
 } as const;
 
-export function AppHeader({ activeView, onOpenSettings, onViewChange }: AppHeaderProps) {
+export function AppHeader({
+  activeView,
+  importedAirports,
+  liveFloorStatus,
+  onOpenSettings,
+  onViewChange,
+  selectedFeeds
+}: AppHeaderProps) {
   return (
-    <header className={cn(panelClass, 'relative overflow-hidden')}>
-      <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(99,212,199,0.16),transparent_38%),radial-gradient(circle_at_top_right,rgba(255,138,76,0.16),transparent_40%)]"
-        aria-hidden="true"
-      />
-      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl space-y-2">
+    <header className={cn(panelClass, 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start')}>
+      <div className="grid gap-4">
+        <div className="max-w-4xl space-y-2">
           <p className={eyebrowClass}>ATC Watchtower</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-100 sm:text-3xl">
-            ATC feed library and listening console
+          <h1 className="text-[1.2rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)] sm:text-[1.35rem]">
+            Priority ATC Monitor
           </h1>
           <p className={mutedTextClass}>
-            Import local playlists, pick an airport, and let the priority engine decide which active feed stays on air.
+            Import local playlists, set feed order, and monitor whichever transmission owns the floor.
           </p>
         </div>
+        <StatusStrip importedAirports={importedAirports} liveFloorStatus={liveFloorStatus} selectedFeeds={selectedFeeds} />
+      </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="grid gap-3 xl:justify-items-end">
+        <SegmentedControl
+          ariaLabel="Primary views"
+          options={(['library', 'console'] as const).map((view) => ({ label: viewLabels[view], value: view }))}
+          value={activeView}
+          onChange={onViewChange}
+        />
+
+        <div className="flex flex-wrap items-center gap-3 xl:justify-end">
           <Button variant="secondary" onClick={onOpenSettings}>
             Settings
           </Button>
-
-          <nav
-            aria-label="Primary views"
-            className="inline-flex w-fit rounded-full border border-white/10 bg-white/[0.06] p-1 backdrop-blur"
-          >
-            {(['library', 'console'] as const).map((view) => (
-              <button
-                key={view}
-                className={cn(
-                  'rounded-full px-4 py-2 text-sm font-medium transition',
-                  activeView === view
-                    ? 'bg-gradient-to-r from-teal to-cyan-100 text-slate-950 shadow-sm'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-stone-100'
-                )}
-                type="button"
-                onClick={() => onViewChange(view)}
-              >
-                {viewLabels[view]}
-              </button>
-            ))}
-          </nav>
         </div>
       </div>
     </header>

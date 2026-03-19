@@ -7,8 +7,8 @@ import {
   type FeedDef
 } from '../../domain/models';
 import { cn } from '../../lib/cn';
-import { Button, StatusPill } from '../ui/common';
-import { eyebrowClass, feedCardClass, insetBlockClass } from '../ui/styles';
+import { Button, MeterRail, StatusField, ToneTag } from '../ui/common';
+import { eyebrowClass, feedCardClass, fieldLabelClass, insetBlockClass } from '../ui/styles';
 
 interface FeedRuntimeCardProps {
   controls: {
@@ -60,52 +60,83 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   const muted = runtime?.muted ?? controls.muted;
   const level = runtime ? Math.min(runtime.peak * 600, 100) : 0;
   const gateStatusTone = runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'warning' : 'neutral';
-  const runtimeStatusTone = runtime?.status === 'error' ? 'danger' : 'neutral';
+  const runtimeStatusTone =
+    runtime?.status === 'error'
+      ? 'danger'
+      : runtime?.status === 'ready'
+        ? 'success'
+        : runtime?.status === 'loading' || runtime?.status === 'buffering'
+          ? 'warning'
+          : 'neutral';
   const measuredDelayMs = runtime?.streamDelayMs;
   const delayDetails =
     runtime && measuredDelayMs !== null && measuredDelayMs !== undefined
       ? getDelayDetails(measuredDelayMs, runtime.playbackDelayMs)
       : null;
+  const signalLabel = runtime?.isFloor ? 'Talking now' : runtime?.gateOpen ? 'Signal detected' : 'Idle';
+  const runtimeLabel = runtime?.status ?? 'idle';
+  const meterTone = runtime?.status === 'error' ? 'danger' : runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'accent' : 'neutral';
 
   return (
     <article
+      data-floor={runtime?.isFloor ? 'true' : 'false'}
+      data-gate={runtime?.gateOpen ? 'open' : 'closed'}
       className={cn(
         feedCardClass,
-        'grid gap-4 transition-[border-color,box-shadow] duration-150',
-        runtime?.isFloor ? 'border-success/45 shadow-floor' : 'shadow-panel'
+        'grid gap-4 transition-[border-color,background-color] duration-150',
+        runtime?.isFloor && 'border-[rgba(143,220,154,0.55)] bg-[rgba(143,220,154,0.04)]',
+        !runtime?.isFloor && runtime?.gateOpen && 'border-[rgba(244,176,62,0.55)]',
+        runtime?.status === 'error' && 'border-[rgba(255,118,97,0.55)]'
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className={eyebrowClass}>Feed</p>
-          <h3 className="text-lg font-semibold tracking-tight text-stone-100">{feed.label}</h3>
-        </div>
-        <StatusPill tone="accent">P{priority}</StatusPill>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <StatusPill tone={!powered ? 'neutral' : gateStatusTone}>
-          {runtime?.isFloor ? 'Talking now' : runtime?.gateOpen ? 'Signal detected' : 'Idle'}
-        </StatusPill>
-        <StatusPill tone={runtimeStatusTone}>{runtime?.status ?? 'idle'}</StatusPill>
-        {!powered ? <StatusPill tone="danger">Powered off</StatusPill> : null}
-        {muted ? <StatusPill tone="warning">Muted</StatusPill> : null}
-      </div>
-
-      {delayDetails ? (
-        <div className={cn(insetBlockClass, 'grid gap-2')} title={delayDetails ?? undefined}>
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Extra lag</span>
-            <strong className="text-sm font-semibold text-stone-100">{formatSecondsFromMs(measuredDelayMs)}</strong>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div className="grid gap-1">
+          <p className={eyebrowClass}>Feed module</p>
+          <h3 className="text-[1rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">{feed.label}</h3>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[0.76rem] text-[var(--wt-muted)]">
+            <span>{feed.frequency ?? 'No frequency listed'}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere]">{feed.streamUrl}</span>
           </div>
-          <p className="text-xs text-slate-400">Behind live edge when the browser exposes it.</p>
+        </div>
+        <ToneTag tone="accent">P{priority}</ToneTag>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <StatusField label="Signal" tone={!powered ? 'neutral' : gateStatusTone} value={signalLabel} />
+        <StatusField label="Runtime" tone={runtimeStatusTone} value={runtimeLabel} />
+      </div>
+
+      {!powered || muted ? (
+        <div className="flex flex-wrap gap-2">
+          {!powered ? <ToneTag tone="danger">Powered off</ToneTag> : null}
+          {muted ? <ToneTag tone="warning">Muted</ToneTag> : null}
         </div>
       ) : null}
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <StatusField
+          className="min-h-[74px]"
+          label="Extra lag"
+          tone={measuredDelayMs !== null && measuredDelayMs !== undefined ? 'accent' : 'neutral'}
+          value={measuredDelayMs !== null && measuredDelayMs !== undefined ? formatSecondsFromMs(measuredDelayMs) : 'N/A'}
+        />
+        <StatusField
+          className="min-h-[74px]"
+          label="Monitor delay"
+          value={formatSecondsFromMs(runtime?.playbackDelayMs ?? 200)}
+        />
+        <div className={cn(insetBlockClass, 'grid gap-2')} title={delayDetails ?? undefined}>
+          <span className={fieldLabelClass}>Lag note</span>
+          <p className="text-[0.8rem] leading-5 text-[var(--wt-muted)]">
+            {delayDetails ? 'Browser live-edge data available.' : 'Browser did not expose live-edge delay.'}
+          </p>
+        </div>
+      </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
         <Button
           aria-label={`${powered ? 'Power off' : 'Power on'} ${feed.label}`}
-          className={powered ? undefined : 'border-rose-300/30 bg-rose-300/12 text-rose-100 enabled:hover:bg-rose-300/18'}
+          className={powered ? undefined : 'border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.14)] text-[var(--wt-danger)]'}
           disabled={controlsDisabled}
           variant="secondary"
           onClick={() => onFeedPoweredChange(feed.id, !powered)}
@@ -114,7 +145,7 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
         </Button>
         <Button
           aria-label={`${muted ? 'Unmute' : 'Mute'} ${feed.label}`}
-          className={muted ? 'border-amber-300/30 bg-amber-300/12 text-amber-100 enabled:hover:bg-amber-300/18' : undefined}
+          className={muted ? 'border-[rgba(244,176,62,0.55)] bg-[rgba(244,176,62,0.14)] text-[var(--wt-accent)]' : undefined}
           disabled={controlsDisabled}
           variant="secondary"
           onClick={() => onFeedMutedChange(feed.id, !muted)}
@@ -125,12 +156,12 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
 
       <div className={cn(insetBlockClass, 'grid gap-3')}>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Squelch</span>
-          <strong className="text-sm font-semibold text-stone-100">{formatDb(squelchThresholdDb)}</strong>
+          <span className={fieldLabelClass}>Squelch</span>
+          <strong className="text-[0.85rem] font-semibold text-[var(--wt-text)]">{formatDb(squelchThresholdDb)}</strong>
         </div>
         <input
           aria-label={`Squelch threshold for ${feed.label}`}
-          className="w-full accent-accent"
+          className="w-full"
           type="range"
           min={MIN_SQUELCH_THRESHOLD_DB}
           max={MAX_SQUELCH_THRESHOLD_DB}
@@ -138,26 +169,19 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
           value={squelchThresholdDb}
           onChange={(event) => onFeedSquelchChange(feed.id, event.currentTarget.valueAsNumber)}
         />
-        <div className="flex justify-between gap-3 text-xs text-slate-400">
+        <div className="flex justify-between gap-3 text-[0.72rem] text-[var(--wt-muted)]">
           <span>More open</span>
           <span>Filter more static</span>
         </div>
       </div>
 
-      <div className="grid gap-2">
-        <div className="flex items-center justify-between gap-3 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-          <span>Peak</span>
-          <span>{formatLevel(runtime?.peak ?? 0)}</span>
-        </div>
-        <div className="h-3 overflow-hidden rounded-full bg-white/8">
-          <span
-            className="block h-full rounded-full bg-gradient-to-r from-teal to-accent transition-[width] duration-75"
-            style={{ width: `${level}%` }}
-          />
-        </div>
-      </div>
+      <MeterRail label="Peak" tone={meterTone} value={level} valueText={formatLevel(runtime?.peak ?? 0)} />
 
-      {runtime?.error ? <p className="text-sm text-rose-200">{runtime.error}</p> : null}
+      {runtime?.error ? (
+        <p className="rounded-[6px] border border-[rgba(255,118,97,0.55)] bg-[rgba(255,118,97,0.12)] px-3 py-2 text-[0.82rem] text-[var(--wt-danger)]">
+          {runtime.error}
+        </p>
+      ) : null}
     </article>
   );
 });

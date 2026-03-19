@@ -3,7 +3,7 @@ import type { AirportEntry } from '../../domain/models';
 import { cn } from '../../lib/cn';
 import { formatAirportLabel } from '../../lib/feedPacks';
 import { EmptyState, SectionHeading } from '../ui/common';
-import { subPanelClass } from '../ui/styles';
+import { fieldLabelClass, subPanelClass } from '../ui/styles';
 
 interface AirportListPanelProps {
   airports: AirportEntry[];
@@ -31,8 +31,8 @@ export function AirportListPanel({
       <SectionHeading
         eyebrow="Airports"
         level="h3"
-        title="Imported packs"
-        description="Choose the airport you want to manage or monitor."
+        title="Airport Manifest"
+        description="Select the airport or pack you want to stage for monitoring."
       />
 
       {airports.length === 0 ? (
@@ -42,36 +42,41 @@ export function AirportListPanel({
           {airports.map((entry) => (
             <li
               key={entry.key}
+              data-drop-active={dragOverAirportKey === entry.key ? 'true' : 'false'}
               className={cn(
-                'rounded-[18px] transition',
-                entry.key === selectedAirportKey && 'ring-1 ring-teal/35',
-                dragOverAirportKey === entry.key && 'ring-1 ring-accent/40'
+                'rounded-[6px] transition',
+                entry.key === selectedAirportKey && 'shadow-[0_0_0_1px_rgba(244,176,62,0.35)]',
+                dragOverAirportKey === entry.key && 'shadow-[0_0_0_1px_rgba(143,220,154,0.38)]'
               )}
               onDragLeave={(event) => onAirportDragLeave(event, entry.key)}
               onDragOver={(event) => onAirportDragOver(event, entry.key)}
               onDrop={(event) => onAirportDrop(event, entry.key)}
             >
               <button
+                aria-pressed={entry.key === selectedAirportKey}
                 className={cn(
-                  'flex w-full items-center justify-between gap-3 rounded-[18px] border px-4 py-3 text-left transition',
+                  'grid w-full gap-3 rounded-[6px] border px-3 py-3 text-left transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
                   entry.key === selectedAirportKey
-                    ? 'border-teal/35 bg-teal/10'
-                    : 'border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.07]',
+                    ? 'border-[var(--wt-accent-strong)] bg-[rgba(244,176,62,0.12)]'
+                    : 'border-[var(--wt-border)] bg-[var(--wt-screen)] hover:border-[var(--wt-border-strong)] hover:text-[var(--wt-text)]',
                   dragOverAirportKey === entry.key &&
-                    'border-[rgba(255,138,76,0.45)] bg-[rgba(255,138,76,0.14)] ring-1 ring-inset ring-[rgba(255,138,76,0.18)]',
+                    'border-[var(--wt-ok)] bg-[rgba(143,220,154,0.08)]',
                   isListening && 'cursor-not-allowed opacity-60'
                 )}
                 disabled={isListening}
                 type="button"
                 onClick={() => onAirportChange(entry.key)}
               >
-                <span className="grid gap-1">
-                  <strong className="text-sm font-semibold text-stone-100">
+                <span className="grid min-w-0 gap-1">
+                  <span className={fieldLabelClass}>{entry.airport.icao}</span>
+                  <strong className="truncate text-[0.95rem] font-semibold uppercase tracking-[0.03em] text-[var(--wt-text)]">
                     {formatAirportLabel(entry.airport, entry.packName)}
                   </strong>
-                  <span className="text-xs text-slate-400">{entry.airport.feeds.length} feeds</span>
+                  <span className="text-[0.78rem] text-[var(--wt-muted)]">{entry.airport.feeds.length} feeds loaded</span>
                 </span>
-                <span className="whitespace-nowrap text-xs text-slate-400">Drop feed here</span>
+                <span className="whitespace-nowrap text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[var(--wt-muted)]">
+                  {dragOverAirportKey === entry.key ? 'Release to move' : 'Drop target'}
+                </span>
               </button>
             </li>
           ))}

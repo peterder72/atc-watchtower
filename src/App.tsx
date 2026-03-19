@@ -3,7 +3,6 @@ import { AudioSettingsDialog } from './components/AudioSettingsDialog';
 import { ConsoleView } from './components/ConsoleView';
 import { LibraryView } from './components/LibraryView';
 import { AppHeader } from './components/AppHeader';
-import { StatusStrip } from './components/StatusStrip';
 import { pageShellClass } from './components/ui/styles';
 import { PriorityAudioEngine } from './audio/priorityAudioEngine';
 import {
@@ -383,17 +382,14 @@ export default function App() {
     <div className={pageShellClass}>
       <AppHeader
         activeView={activeView}
+        importedAirports={airports.length}
+        liveFloorStatus={engineSnapshot.floorFeedId ? 'Active' : 'Idle'}
         onOpenSettings={() => setIsAudioSettingsOpen(true)}
         onViewChange={setActiveView}
+        selectedFeeds={selectedFeeds.length}
       />
 
       <main className="space-y-4">
-        <StatusStrip
-          importedAirports={airports.length}
-          selectedFeeds={selectedFeeds.length}
-          liveFloorStatus={engineSnapshot.floorFeedId ? 'Active' : 'Idle'}
-        />
-
         {activeView === 'library' ? (
           <LibraryView
             airports={airports}

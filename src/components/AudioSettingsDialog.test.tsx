@@ -56,4 +56,40 @@ describe('AudioSettingsDialog', () => {
 
     expect(onReset).toHaveBeenCalledTimes(1);
   });
+
+  it('closes when escape is pressed', () => {
+    const onClose = vi.fn();
+
+    render(
+      <AudioSettingsDialog
+        isOpen
+        settings={DEFAULT_AUDIO_PROCESSING_SETTINGS}
+        onChange={vi.fn()}
+        onClose={onClose}
+        onReset={vi.fn()}
+      />
+    );
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes when the overlay is clicked', () => {
+    const onClose = vi.fn();
+
+    render(
+      <AudioSettingsDialog
+        isOpen
+        settings={DEFAULT_AUDIO_PROCESSING_SETTINGS}
+        onChange={vi.fn()}
+        onClose={onClose}
+        onReset={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('dialog').parentElement!);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

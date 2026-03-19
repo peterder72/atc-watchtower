@@ -3,6 +3,25 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --wt-bg: #0c0f0c;
+    --wt-bg-soft: #131713;
+    --wt-panel: #1a2018;
+    --wt-panel-2: #151a14;
+    --wt-screen: #101410;
+    --wt-border: #434a3d;
+    --wt-border-strong: #5b6453;
+    --wt-text: #f0ecd9;
+    --wt-text-dim: #b6b19d;
+    --wt-muted: #a19d88;
+    --wt-accent: #f4b03e;
+    --wt-accent-strong: #ffd16e;
+    --wt-accent-soft: #d8ad52;
+    --wt-ok: #8fdc9a;
+    --wt-danger: #ff7661;
+    --wt-ink-strong: #211b09;
+  }
+
   html,
   body,
   #root {
@@ -10,12 +29,41 @@
   }
 
   body {
-    @apply min-h-screen bg-canvas bg-watchtower-glow font-sans text-ink antialiased;
+    min-height: 100vh;
+    margin: 0;
+    background:
+      linear-gradient(180deg, rgba(255, 209, 110, 0.04), transparent 20%),
+      linear-gradient(180deg, var(--wt-bg-soft) 0%, var(--wt-bg) 100%);
+    color: var(--wt-text);
+    font-family:
+      ui-monospace,
+      'SFMono-Regular',
+      Menlo,
+      Monaco,
+      Consolas,
+      'Liberation Mono',
+      'Courier New',
+      monospace;
+    font-size: 15px;
+    line-height: 1.45;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 
   button,
   input,
-  select {
+  select,
+  textarea {
     font: inherit;
+  }
+
+  input[type='checkbox'],
+  input[type='range'] {
+    accent-color: var(--wt-accent);
+  }
+
+  ::selection {
+    background: rgba(244, 176, 62, 0.35);
+    color: var(--wt-text);
   }
 }

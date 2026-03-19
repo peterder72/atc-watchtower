@@ -69,6 +69,15 @@ function ConsoleViewHarness() {
 }
 
 describe('ConsoleView', () => {
+  it('shows the operator toolbar summary', () => {
+    render(<ConsoleViewHarness />);
+
+    expect(screen.getByRole('heading', { name: 'EHEH' })).toBeTruthy();
+    expect(screen.getByText('Current speaker')).toBeTruthy();
+    expect(screen.getByText('Console state')).toBeTruthy();
+    expect(screen.getByText('Running')).toBeTruthy();
+  });
+
   it('hides the debug panel by default and toggles it from the toolbar', () => {
     render(<ConsoleViewHarness />);
 
@@ -111,6 +120,31 @@ describe('ConsoleView', () => {
 
     expect(onFeedPoweredChange).toHaveBeenCalledWith('tower', false);
     expect(onFeedMutedChange).toHaveBeenCalledWith('tower', true);
+  });
+
+  it('shows the empty state when no feeds are selected', () => {
+    render(
+      <ConsoleView
+        airportName="EHEH"
+        feeds={[]}
+        feedControls={{}}
+        feedPriorities={{}}
+        feedSquelchThresholdsDb={{}}
+        engineSnapshot={{ ...runningSnapshot, feeds: {} }}
+        isDebugVisible={false}
+        isRunning={false}
+        isResyncing={false}
+        onStart={vi.fn()}
+        onResyncAll={vi.fn()}
+        onStop={vi.fn()}
+        onFeedMutedChange={vi.fn()}
+        onFeedPoweredChange={vi.fn()}
+        onFeedSquelchChange={vi.fn()}
+        onToggleDebug={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Select one or more feeds in the Library before starting the console.')).toBeTruthy();
   });
 
   it('wires the resync control and disables it when not running', () => {

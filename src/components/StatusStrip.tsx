@@ -1,4 +1,4 @@
-import { StatCard } from './ui/common';
+import { StatusField } from './ui/common';
 
 interface StatusStripProps {
   importedAirports: number;
@@ -8,10 +8,10 @@ interface StatusStripProps {
 
 export function StatusStrip({ importedAirports, selectedFeeds, liveFloorStatus }: StatusStripProps) {
   return (
-    <section className="grid gap-3 md:grid-cols-3">
-      <StatCard label="Imported airports" value={importedAirports} />
-      <StatCard label="Selected feeds" value={selectedFeeds} />
-      <StatCard label="Live floor" value={liveFloorStatus} />
+    <section className="grid gap-2 sm:grid-cols-3">
+      <StatusField label="Imported airports" value={importedAirports} />
+      <StatusField label="Selected feeds" value={selectedFeeds} />
+      <StatusField label="Live floor" tone={liveFloorStatus === 'Active' ? 'success' : 'neutral'} value={liveFloorStatus} />
     </section>
   );
 }
