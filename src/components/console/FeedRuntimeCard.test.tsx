@@ -98,8 +98,8 @@ describe('FeedRuntimeCard', () => {
       status: 'idle'
     });
 
-    expect(screen.getByText('Powered off')).toBeTruthy();
-    expect(screen.getByText('Muted')).toBeTruthy();
+    expect(screen.getByText(/powered off/i)).toBeTruthy();
+    expect(screen.getByText(/muted/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Power on EHEH Tower' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Unmute EHEH Tower' })).toBeTruthy();
     expect(article?.getAttribute('data-floor')).toBe('false');
@@ -115,11 +115,11 @@ describe('FeedRuntimeCard', () => {
   it('shows measured extra lag and hover details', () => {
     renderCard(baseRuntime);
 
-    expect(screen.getByText('1.4 s')).toBeTruthy();
-    expect(screen.getByText('Browser live-edge data available.').closest('[title]')?.getAttribute('title')).toContain(
+    expect(screen.getByText('1.6 s')).toBeTruthy();
+    expect(screen.getByText('Net 1.4 s + Monitor 0.2 s').closest('[title]')?.getAttribute('title')).toContain(
       'Built-in monitor delay: 0.2 s'
     );
-    expect(screen.getByText('Browser live-edge data available.').closest('[title]')?.getAttribute('title')).toContain(
+    expect(screen.getByText('Net 1.4 s + Monitor 0.2 s').closest('[title]')?.getAttribute('title')).toContain(
       'Total heard delay: 1.6 s'
     );
   });
@@ -130,8 +130,8 @@ describe('FeedRuntimeCard', () => {
       streamDelayMs: null
     });
 
-    expect(screen.getByText('Extra lag')).toBeTruthy();
-    expect(screen.getByText('N/A')).toBeTruthy();
-    expect(screen.getByText('Browser did not expose live-edge delay.')).toBeTruthy();
+    expect(screen.getByText('Heard delay')).toBeTruthy();
+    expect(screen.getByText('0.2 s')).toBeTruthy();
+    expect(screen.getByText('Monitor only')).toBeTruthy();
   });
 });

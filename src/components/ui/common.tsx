@@ -2,7 +2,9 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import {
   buttonClass,
+  type ButtonSize,
   type ButtonVariant,
+  compactInsetBlockClass,
   fieldLabelClass,
   eyebrowClass,
   insetBlockClass,
@@ -56,6 +58,7 @@ interface EmptyStateProps {
 
 interface MeterRailProps {
   className?: string;
+  compact?: boolean;
   label: string;
   tone?: Tone;
   value: number;
@@ -83,11 +86,50 @@ interface SegmentedControlProps<T extends string> {
 
 export function Button({
   className,
+  size = 'default',
   type = 'button',
   variant = 'primary',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
-  return <button className={buttonClass(variant, className)} type={type} {...props} />;
+}: ButtonHTMLAttributes<HTMLButtonElement> & { size?: ButtonSize; variant?: ButtonVariant }) {
+  return <button className={buttonClass(variant, className, size)} type={type} {...props} />;
+}
+
+interface IconToggleButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+  icon: ReactNode;
+  label: string;
+  pressed?: boolean;
+  pressedIcon?: ReactNode;
+  pressedTone?: Exclude<Tone, 'neutral'>;
+}
+
+export function IconToggleButton({
+  className,
+  icon,
+  label,
+  pressed = false,
+  pressedIcon,
+  pressedTone = 'accent',
+  type = 'button',
+  ...props
+}: IconToggleButtonProps) {
+  return (
+    <button
+      aria-label={label}
+      aria-pressed={pressed}
+      className={cn(
+        'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] border transition duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--wt-accent)] disabled:pointer-events-none disabled:opacity-45',
+        pressed
+          ? toneClass[pressedTone]
+          : 'border-[var(--wt-border-strong)] bg-[var(--wt-screen)] text-[var(--wt-text)] enabled:hover:border-[var(--wt-accent-soft)] enabled:hover:text-[var(--wt-accent)]',
+        className
+      )}
+      title={label}
+      type={type}
+      {...props}
+    >
+      {pressed ? pressedIcon ?? icon : icon}
+    </button>
+  );
 }
 
 export function SectionHeading({
@@ -148,7 +190,7 @@ export function EmptyState({ children, className }: EmptyStateProps) {
   return <div className={cn(insetBlockClass, mutedTextClass, className)}>{children}</div>;
 }
 
-export function MeterRail({ className, label, tone = 'neutral', value, valueText }: MeterRailProps) {
+export function MeterRail({ className, compact = false, label, tone = 'neutral', value, valueText }: MeterRailProps) {
   const clampedValue = Math.max(0, Math.min(100, value));
   const railToneClass =
     tone === 'success'
@@ -160,12 +202,12 @@ export function MeterRail({ className, label, tone = 'neutral', value, valueText
           : 'bg-[var(--wt-text-dim)]';
 
   return (
-    <div className={cn(insetBlockClass, 'grid gap-2', className)}>
+    <div className={cn(compact ? compactInsetBlockClass : insetBlockClass, compact ? 'grid gap-1.5' : 'grid gap-2', className)}>
       <div className="flex items-center justify-between gap-3">
         <span className={fieldLabelClass}>{label}</span>
         <strong className="text-[0.8rem] font-semibold text-[var(--wt-text)]">{valueText}</strong>
       </div>
-      <div className="h-3 rounded-[4px] border border-[var(--wt-border)] bg-[var(--wt-panel)] p-[2px]">
+      <div className={cn('rounded-[4px] border border-[var(--wt-border)] bg-[var(--wt-panel)] p-[2px]', compact ? 'h-2.5' : 'h-3')}>
         <span className={cn('block h-full rounded-[2px] transition-[width] duration-75', railToneClass)} style={{ width: `${clampedValue}%` }} />
       </div>
     </div>

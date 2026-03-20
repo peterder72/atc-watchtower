@@ -1,5 +1,6 @@
-import { Button, StatusField } from '../ui/common';
-import { insetBlockClass } from '../ui/styles';
+import { Button } from '../ui/common';
+import { cn } from '../../lib/cn';
+import { eyebrowClass, fieldLabelClass, insetBlockClass } from '../ui/styles';
 
 interface ConsoleToolbarProps {
   activeSpeaker: string | null;
@@ -26,40 +27,47 @@ export function ConsoleToolbar({
   onStop,
   onToggleDebug
 }: ConsoleToolbarProps) {
+  const consoleState = isRunning ? (isResyncing ? 'Resyncing' : 'Running') : 'Standby';
+
   return (
-    <section className={`${insetBlockClass} grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start`}>
-      <div className="grid gap-3">
-        <div className="space-y-1">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[var(--wt-accent-soft)]">Console</p>
-          <h2 className="text-[1.1rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">
-            {airportName || 'No airport selected'}
-          </h2>
-          <p className="text-[0.9rem] text-[var(--wt-muted)]">
-            {activeSpeaker ? `Current speaker: ${activeSpeaker}` : 'Current speaker: none detected'}
-          </p>
+    <section className={cn(insetBlockClass, 'grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start')}>
+      <div className="grid gap-2 min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className={eyebrowClass}>Console</p>
+            <h2 className="truncate text-[1rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">
+              {airportName || 'No airport selected'}
+            </h2>
+          </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <StatusField label="Current speaker" tone={activeSpeaker ? 'success' : 'neutral'} value={activeSpeaker ?? 'None'} />
-          <StatusField
-            label="Console state"
-            tone={isRunning ? (isResyncing ? 'warning' : 'success') : 'neutral'}
-            value={isRunning ? (isResyncing ? 'Resyncing' : 'Running') : 'Standby'}
-          />
+        <div className="flex flex-wrap gap-2">
+          <div className="grid min-w-[12rem] gap-1 rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-2 shadow-[var(--wt-shadow-panel-soft)]">
+            <span className={fieldLabelClass}>Current speaker</span>
+            <strong className="truncate text-[0.88rem] font-semibold uppercase tracking-[0.04em] text-[var(--wt-text)]">
+              {activeSpeaker ?? 'None'}
+            </strong>
+          </div>
+          <div className="grid min-w-[10rem] gap-1 rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-2 shadow-[var(--wt-shadow-panel-soft)]">
+            <span className={fieldLabelClass}>Console state</span>
+            <strong className="text-[0.88rem] font-semibold uppercase tracking-[0.04em] text-[var(--wt-text)]">
+              {consoleState}
+            </strong>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <Button variant="secondary" onClick={onToggleDebug}>
+      <div className="flex flex-wrap gap-2 lg:justify-end">
+        <Button size="compact" variant="secondary" onClick={onToggleDebug}>
           {isDebugVisible ? 'Hide debug' : 'Show debug'}
         </Button>
-        <Button disabled={!isRunning} variant="secondary" onClick={onStop}>
+        <Button disabled={!isRunning} size="compact" variant="secondary" onClick={onStop}>
           Stop
         </Button>
-        <Button disabled={!isRunning || isResyncing} variant="secondary" onClick={onResyncAll}>
+        <Button disabled={!isRunning || isResyncing} size="compact" variant="secondary" onClick={onResyncAll}>
           {isResyncing ? 'Resyncing...' : 'Resync all'}
         </Button>
-        <Button disabled={!canStart} onClick={onStart}>
+        <Button disabled={!canStart} size="compact" onClick={onStart}>
           Start listening
         </Button>
       </div>

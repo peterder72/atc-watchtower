@@ -76,6 +76,7 @@ describe('ConsoleView', () => {
     expect(screen.getByText('Current speaker')).toBeTruthy();
     expect(screen.getByText('Console state')).toBeTruthy();
     expect(screen.getByText('Running')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start listening' })).toBeTruthy();
   });
 
   it('hides the debug panel by default and toggles it from the toolbar', () => {

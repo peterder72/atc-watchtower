@@ -8,17 +8,21 @@ export const subPanelClass =
 export const statCardClass =
   'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[var(--wt-shadow-panel-soft)]';
 export const feedCardClass =
-  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] p-4 shadow-[var(--wt-shadow-panel-soft)]';
+  'rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] p-3 shadow-[var(--wt-shadow-panel-soft)]';
 export const insetBlockClass =
   'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-3 shadow-[var(--wt-shadow-panel-softer)]';
+export const compactInsetBlockClass =
+  'rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)] px-3 py-2 shadow-[var(--wt-shadow-panel-softer)]';
 export const eyebrowClass = 'text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[var(--wt-accent-soft)]';
 export const fieldLabelClass = 'text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-[var(--wt-muted)]';
 export const titleClass = 'text-[1.125rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]';
 export const mutedTextClass = 'text-[0.9rem] leading-5 text-[var(--wt-muted)]';
 export const segmentedShellClass = 'inline-grid grid-cols-2 gap-1 rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-screen)] p-1';
 
-const buttonBaseClass =
-  'inline-flex min-h-10 items-center justify-center rounded-[6px] border px-3 py-2 text-[0.82rem] font-semibold uppercase tracking-[0.08em] transition duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--wt-accent)] disabled:pointer-events-none disabled:opacity-45';
+const buttonSizeClass = {
+  compact: 'min-h-9 px-3 py-1.5 text-[0.76rem]',
+  default: 'min-h-10 px-3 py-2 text-[0.82rem]'
+} as const;
 
 const buttonVariantClass = {
   primary:
@@ -30,7 +34,17 @@ const buttonVariantClass = {
 } as const;
 
 export type ButtonVariant = keyof typeof buttonVariantClass;
+export type ButtonSize = keyof typeof buttonSizeClass;
 
-export function buttonClass(variant: ButtonVariant = 'primary', className?: string): string {
-  return cn(buttonBaseClass, buttonVariantClass[variant], className);
+export function buttonClass(
+  variant: ButtonVariant = 'primary',
+  className?: string,
+  size: ButtonSize = 'default'
+): string {
+  return cn(
+    'inline-flex items-center justify-center rounded-[6px] border font-semibold uppercase tracking-[0.08em] transition duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--wt-accent)] disabled:pointer-events-none disabled:opacity-45',
+    buttonSizeClass[size],
+    buttonVariantClass[variant],
+    className
+  );
 }

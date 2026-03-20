@@ -1,3 +1,4 @@
+import { Power, PowerOff, Volume2, VolumeX } from 'lucide-react';
 import { memo } from 'react';
 import {
   DEFAULT_SQUELCH_THRESHOLD_DB,
@@ -7,8 +8,8 @@ import {
   type FeedDef
 } from '../../domain/models';
 import { cn } from '../../lib/cn';
-import { Button, MeterRail, StatusField, ToneTag } from '../ui/common';
-import { eyebrowClass, feedCardClass, fieldLabelClass, insetBlockClass } from '../ui/styles';
+import { IconToggleButton, MeterRail, ToneTag } from '../ui/common';
+import { compactInsetBlockClass, feedCardClass, fieldLabelClass } from '../ui/styles';
 
 interface FeedRuntimeCardProps {
   controls: {
@@ -45,6 +46,26 @@ function getDelayDetails(streamDelayMs: number, playbackDelayMs: number): string
   return `Extra stream lag: ${extraLag}\nBuilt-in monitor delay: ${builtInDelay}\nTotal heard delay: ${totalDelay}`;
 }
 
+function getDelaySummary(runtime: EngineFeedState | undefined): { detail: string; title: string; value: string } {
+  const playbackDelayMs = runtime?.playbackDelayMs ?? 200;
+  const monitorDelay = formatSecondsFromMs(playbackDelayMs);
+
+  if (!runtime || runtime.streamDelayMs === null || runtime.streamDelayMs === undefined) {
+    return {
+      detail: 'Monitor only',
+      title: `Browser did not expose live-edge delay.\nBuilt-in monitor delay: ${monitorDelay}`,
+      value: monitorDelay
+    };
+  }
+
+  const streamDelay = formatSecondsFromMs(runtime.streamDelayMs);
+  return {
+    detail: `Net ${streamDelay} + Monitor ${monitorDelay}`,
+    title: getDelayDetails(runtime.streamDelayMs, playbackDelayMs),
+    value: formatSecondsFromMs(runtime.streamDelayMs + playbackDelayMs)
+  };
+}
+
 export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   controls,
   controlsDisabled,
@@ -59,23 +80,21 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
   const powered = runtime?.powered ?? controls.powered;
   const muted = runtime?.muted ?? controls.muted;
   const level = runtime ? Math.min(runtime.peak * 600, 100) : 0;
-  const gateStatusTone = runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'warning' : 'neutral';
+  const gateStatusTone = !powered ? 'danger' : runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'warning' : 'neutral';
   const runtimeStatusTone =
     runtime?.status === 'error'
       ? 'danger'
-      : runtime?.status === 'ready'
-        ? 'success'
-        : runtime?.status === 'loading' || runtime?.status === 'buffering'
+      : muted
+        ? 'warning'
+        : runtime?.status === 'ready'
+          ? 'success'
+          : runtime?.status === 'loading' || runtime?.status === 'buffering'
           ? 'warning'
           : 'neutral';
-  const measuredDelayMs = runtime?.streamDelayMs;
-  const delayDetails =
-    runtime && measuredDelayMs !== null && measuredDelayMs !== undefined
-      ? getDelayDetails(measuredDelayMs, runtime.playbackDelayMs)
-      : null;
-  const signalLabel = runtime?.isFloor ? 'Talking now' : runtime?.gateOpen ? 'Signal detected' : 'Idle';
-  const runtimeLabel = runtime?.status ?? 'idle';
+  const signalLabel = !powered ? 'Powered off' : runtime?.isFloor ? 'Talking now' : runtime?.gateOpen ? 'Signal detected' : 'Idle';
+  const runtimeLabel = muted ? `Muted / ${runtime?.status ?? 'idle'}` : runtime?.status ?? 'idle';
   const meterTone = runtime?.status === 'error' ? 'danger' : runtime?.isFloor ? 'success' : runtime?.gateOpen ? 'accent' : 'neutral';
+  const delaySummary = getDelaySummary(runtime);
 
   return (
     <article
@@ -83,99 +102,84 @@ export const FeedRuntimeCard = memo(function FeedRuntimeCard({
       data-gate={runtime?.gateOpen ? 'open' : 'closed'}
       className={cn(
         feedCardClass,
-        'grid gap-4 transition-[border-color,background-color] duration-150',
+        'grid gap-3 transition-[border-color,background-color] duration-150',
         runtime?.isFloor && 'border-[var(--wt-tone-success-border)] bg-[var(--wt-tone-success-bg-faint)]',
         !runtime?.isFloor && runtime?.gateOpen && 'border-[var(--wt-tone-accent-border)]',
         runtime?.status === 'error' && 'border-[var(--wt-tone-danger-border)]'
       )}
     >
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-        <div className="grid gap-1">
-          <p className={eyebrowClass}>Feed module</p>
-          <h3 className="text-[1rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">{feed.label}</h3>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[0.76rem] text-[var(--wt-muted)]">
-            <span>{feed.frequency ?? 'No frequency listed'}</span>
-            <span className="min-w-0 [overflow-wrap:anywhere]">{feed.streamUrl}</span>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+        <div className="flex min-w-0 items-start gap-3">
+          <ToneTag className="shrink-0" tone="accent">
+            P{priority}
+          </ToneTag>
+          <div className="grid min-w-0 gap-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h3 className="truncate text-[0.96rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">
+                {feed.label}
+              </h3>
+              <span className="text-[0.74rem] font-semibold uppercase tracking-[0.08em] text-[var(--wt-muted)]">
+                {feed.frequency ?? 'No frequency'}
+              </span>
+            </div>
+            <p className="truncate text-[0.76rem] text-[var(--wt-muted)]" title={feed.streamUrl}>
+              {feed.streamUrl}
+            </p>
           </div>
         </div>
-        <ToneTag tone="accent">P{priority}</ToneTag>
-      </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <StatusField label="Signal" tone={!powered ? 'neutral' : gateStatusTone} value={signalLabel} />
-        <StatusField label="Runtime" tone={runtimeStatusTone} value={runtimeLabel} />
-      </div>
-
-      {!powered || muted ? (
-        <div className="flex flex-wrap gap-2">
-          {!powered ? <ToneTag tone="danger">Powered off</ToneTag> : null}
-          {muted ? <ToneTag tone="warning">Muted</ToneTag> : null}
-        </div>
-      ) : null}
-
-      <div className="grid gap-2 sm:grid-cols-3">
-        <StatusField
-          className="min-h-[74px]"
-          label="Extra lag"
-          tone={measuredDelayMs !== null && measuredDelayMs !== undefined ? 'accent' : 'neutral'}
-          value={measuredDelayMs !== null && measuredDelayMs !== undefined ? formatSecondsFromMs(measuredDelayMs) : 'N/A'}
-        />
-        <StatusField
-          className="min-h-[74px]"
-          label="Monitor delay"
-          value={formatSecondsFromMs(runtime?.playbackDelayMs ?? 200)}
-        />
-        <div className={cn(insetBlockClass, 'grid gap-2')} title={delayDetails ?? undefined}>
-          <span className={fieldLabelClass}>Lag note</span>
-          <p className="text-[0.8rem] leading-5 text-[var(--wt-muted)]">
-            {delayDetails ? 'Browser live-edge data available.' : 'Browser did not expose live-edge delay.'}
-          </p>
+        <div className="flex items-center gap-2 xl:justify-end">
+          <IconToggleButton
+            disabled={controlsDisabled}
+            icon={<Power aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
+            label={`${powered ? 'Power off' : 'Power on'} ${feed.label}`}
+            pressed={!powered}
+            pressedIcon={<PowerOff aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
+            pressedTone="danger"
+            onClick={() => onFeedPoweredChange(feed.id, !powered)}
+          />
+          <IconToggleButton
+            disabled={controlsDisabled}
+            icon={<Volume2 aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
+            label={`${muted ? 'Unmute' : 'Mute'} ${feed.label}`}
+            pressed={muted}
+            pressedIcon={<VolumeX aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
+            pressedTone="warning"
+            onClick={() => onFeedMutedChange(feed.id, !muted)}
+          />
         </div>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <Button
-          aria-label={`${powered ? 'Power off' : 'Power on'} ${feed.label}`}
-          className={powered ? undefined : 'border-[var(--wt-tone-danger-border)] bg-[var(--wt-tone-danger-bg-strong)] text-[var(--wt-danger)]'}
-          disabled={controlsDisabled}
-          variant="secondary"
-          onClick={() => onFeedPoweredChange(feed.id, !powered)}
-        >
-          {powered ? 'Power off' : 'Power on'}
-        </Button>
-        <Button
-          aria-label={`${muted ? 'Unmute' : 'Mute'} ${feed.label}`}
-          className={muted ? 'border-[var(--wt-tone-accent-border)] bg-[var(--wt-tone-accent-bg)] text-[var(--wt-accent)]' : undefined}
-          disabled={controlsDisabled}
-          variant="secondary"
-          onClick={() => onFeedMutedChange(feed.id, !muted)}
-        >
-          {muted ? 'Unmute' : 'Mute'}
-        </Button>
-      </div>
-
-      <div className={cn(insetBlockClass, 'grid gap-3')}>
-        <div className="flex items-baseline justify-between gap-3">
-          <span className={fieldLabelClass}>Squelch</span>
-          <strong className="text-[0.85rem] font-semibold text-[var(--wt-text)]">{formatDb(squelchThresholdDb)}</strong>
+        <div className="flex flex-wrap gap-2 sm:col-span-2">
+          <ToneTag tone={gateStatusTone}>{signalLabel}</ToneTag>
+          <ToneTag tone={runtimeStatusTone}>{runtimeLabel}</ToneTag>
         </div>
-        <input
-          aria-label={`Squelch threshold for ${feed.label}`}
-          className="w-full"
-          type="range"
-          min={MIN_SQUELCH_THRESHOLD_DB}
-          max={MAX_SQUELCH_THRESHOLD_DB}
-          step={1}
-          value={squelchThresholdDb}
-          onChange={(event) => onFeedSquelchChange(feed.id, event.currentTarget.valueAsNumber)}
-        />
-        <div className="flex justify-between gap-3 text-[0.72rem] text-[var(--wt-muted)]">
-          <span>More open</span>
-          <span>Filter more static</span>
+        <div className={cn(compactInsetBlockClass, 'grid gap-1')} title={delaySummary.title}>
+          <span className={fieldLabelClass}>Heard delay</span>
+          <strong className="text-[0.86rem] font-semibold uppercase tracking-[0.04em] text-[var(--wt-text)]">
+            {delaySummary.value}
+          </strong>
+          <span className="text-[0.72rem] leading-4 text-[var(--wt-muted)]">{delaySummary.detail}</span>
+        </div>
+        <MeterRail compact className="min-w-0" label="Peak" tone={meterTone} value={level} valueText={formatLevel(runtime?.peak ?? 0)} />
+        <div className={cn(compactInsetBlockClass, 'grid gap-2 sm:col-span-2')}>
+          <div className="flex items-center justify-between gap-3">
+            <span className={fieldLabelClass}>Squelch</span>
+            <strong className="text-[0.8rem] font-semibold text-[var(--wt-text)]">{formatDb(squelchThresholdDb)}</strong>
+          </div>
+          <input
+            aria-label={`Squelch threshold for ${feed.label}`}
+            className="w-full"
+            type="range"
+            min={MIN_SQUELCH_THRESHOLD_DB}
+            max={MAX_SQUELCH_THRESHOLD_DB}
+            step={1}
+            value={squelchThresholdDb}
+            onChange={(event) => onFeedSquelchChange(feed.id, event.currentTarget.valueAsNumber)}
+          />
         </div>
       </div>
-
-      <MeterRail label="Peak" tone={meterTone} value={level} valueText={formatLevel(runtime?.peak ?? 0)} />
 
       {runtime?.error ? (
         <p className="rounded-[6px] border border-[var(--wt-tone-danger-border)] bg-[var(--wt-tone-danger-bg)] px-3 py-2 text-[0.82rem] text-[var(--wt-danger)]">

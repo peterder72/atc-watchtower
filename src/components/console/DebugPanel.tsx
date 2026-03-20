@@ -4,7 +4,7 @@ import {
   type FeedDef
 } from '../../domain/models';
 import { cn } from '../../lib/cn';
-import { eyebrowClass, fieldLabelClass, subPanelClass } from '../ui/styles';
+import { eyebrowClass, fieldLabelClass } from '../ui/styles';
 
 interface DebugPanelProps {
   engineSnapshot: EngineSnapshot;
@@ -30,14 +30,18 @@ function formatDb(value: number): string {
 
 export function DebugPanel({ engineSnapshot, feedSquelchThresholdsDb, feeds }: DebugPanelProps) {
   return (
-    <section className={cn(subPanelClass, 'space-y-4')}>
+    <section
+      className={cn(
+        'space-y-3 rounded-[7px] border border-[var(--wt-border)] bg-[var(--wt-panel-2)] px-3 py-3 shadow-[var(--wt-shadow-panel-soft)]'
+      )}
+    >
       <div className="space-y-1">
         <p className={eyebrowClass}>Debug</p>
-        <h3 className="text-[1rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">Signal pipeline</h3>
+        <h3 className="text-[0.95rem] font-semibold uppercase tracking-[0.05em] text-[var(--wt-text)]">Signal pipeline</h3>
       </div>
 
       <div className="overflow-x-auto rounded-[6px] border border-[var(--wt-border)] bg-[var(--wt-screen)]">
-        <table className="min-w-[980px] w-full border-collapse text-left text-[0.78rem] text-[var(--wt-muted)]">
+        <table className="min-w-[980px] w-full border-collapse text-left text-[0.74rem] text-[var(--wt-muted)]">
           <thead>
             <tr className="border-b border-[var(--wt-border)]">
               {['Feed', 'Squelch', 'Mode', 'Status', 'Gate', 'Floor', 'Peak', 'Time', 'Ready', 'Net', 'Tracks', 'Debug'].map(
